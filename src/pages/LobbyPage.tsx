@@ -3,6 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { RoomShareBox } from '../components/room/RoomShareBox'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
+import { CARD_SET_SIZES } from '../game/deck'
+import type { StartingCluesMode } from '../game/setup'
+import type { CardSetSize } from '../types/card'
 import {
   joinRoom,
   leaveGame,
@@ -10,6 +13,8 @@ import {
   listenToRoom,
   removePlayerFromLobby,
   setPlayerReady,
+  setRoomCardSetSize,
+  setRoomStartingCluesMode,
   startGame,
 } from '../firebase/rooms'
 import type { LobbyPlayer, RoomDoc } from '../types/room'
@@ -44,7 +49,7 @@ export function LobbyPage() {
   }, [roomCode])
 
   useEffect(() => {
-    if (room?.status === 'playing') {
+    if (room?.status === 'playing' || room?.status === 'setupClues') {
       navigate(`/game/${roomCode}`)
     }
 
@@ -70,6 +75,8 @@ export function LobbyPage() {
   }, [currentPlayer, navigate, room?.status])
 
   const isHost = room?.hostId === user?.uid
+  const selectedCardSetSize = room?.cardSetSize ?? 8
+  const selectedStartingCluesMode = room?.startingCluesMode ?? 'automatic'
   const canStart =
     isHost &&
     players.length >= 2 &&
@@ -114,6 +121,50 @@ export function LobbyPage() {
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not update ready.')
     }
+  }
+
+  async function runHostOptionUpdate(
+    action: () => Promise<void>,
+    fallbackMessage: string,
+  ) {
+    if (!user || !isHost) return
+
+    setError('')
+    setBusy(true)
+
+    try {
+      await action()
+    } catch (error) {
+      setError(error instanceof Error ? error.message : fallbackMessage)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleCardSetSizeChange(cardSetSize: CardSetSize) {
+    await runHostOptionUpdate(
+      () =>
+        setRoomCardSetSize({
+          roomCode,
+          hostId: user!.uid,
+          cardSetSize,
+        }),
+      'Could not update card options.',
+    )
+  }
+
+  async function handleStartingCluesModeChange(
+    startingCluesMode: StartingCluesMode,
+  ) {
+    await runHostOptionUpdate(
+      () =>
+        setRoomStartingCluesMode({
+          roomCode,
+          hostId: user!.uid,
+          startingCluesMode,
+        }),
+      'Could not update starting clue options.',
+    )
   }
 
   async function handleStartGame() {
@@ -304,6 +355,77 @@ export function LobbyPage() {
               <h2 className="font-bold">Room Controls</h2>
 
               <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <p className="text-sm font-bold text-slate-200">Card Set</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Choose how many animals, disguises, and locations are in the deck.
+                  </p>
+
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {CARD_SET_SIZES.map((cardSetSize) => {
+                      const selected = selectedCardSetSize === cardSetSize
+
+                      return (
+                        <Button
+                          key={cardSetSize}
+                          variant={selected ? 'primary' : 'secondary'}
+                          onClick={() => handleCardSetSizeChange(cardSetSize)}
+                          disabled={!isHost || busy || leaving || selected}
+                          className="w-full"
+                        >
+                          {cardSetSize}x{cardSetSize}x{cardSetSize}
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  {!isHost ? (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Only the host can change this option.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
+                  <p className="text-sm font-bold text-slate-200">
+                    Starting Clues
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Automatic gives each player one YES and one NO clue. Player choice lets each player pick a YES and NO clue for the next player, with at least one valid YES and one valid NO guaranteed in their hand.
+                  </p>
+
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {[
+                      ['automatic', 'Automatic'],
+                      ['playerChoice', 'Players choose'],
+                    ].map(([mode, label]) => {
+                      const startingCluesMode = mode as StartingCluesMode
+                      const selected =
+                        selectedStartingCluesMode === startingCluesMode
+
+                      return (
+                        <Button
+                          key={startingCluesMode}
+                          variant={selected ? 'primary' : 'secondary'}
+                          onClick={() =>
+                            handleStartingCluesModeChange(startingCluesMode)
+                          }
+                          disabled={!isHost || busy || leaving || selected}
+                          className="w-full"
+                        >
+                          {label}
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  {!isHost ? (
+                    <p className="mt-3 text-xs text-slate-500">
+                      Only the host can change this option.
+                    </p>
+                  ) : null}
+                </div>
+
                 <Button
                   variant={currentPlayer.ready ? 'secondary' : 'primary'}
                   onClick={handleToggleReady}

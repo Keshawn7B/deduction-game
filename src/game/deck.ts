@@ -1,4 +1,4 @@
-import type { Animal, Card, Disguise, Location } from '../types/card'
+import type { Animal, Card, CardSetSize, Disguise, Location } from '../types/card'
 
 export const ANIMALS: Animal[] = [
   'Fox',
@@ -33,12 +33,21 @@ export const LOCATIONS: Location[] = [
   'Library',
 ]
 
-export function createDeck(): Card[] {
-  const cards: Card[] = []
+export const CARD_SET_SIZES = [4, 6, 8] as const
 
-  for (const animal of ANIMALS) {
-    for (const disguise of DISGUISES) {
-      for (const location of LOCATIONS) {
+export function isCardSetSize(value: number): value is CardSetSize {
+  return CARD_SET_SIZES.includes(value as CardSetSize)
+}
+
+export function createDeck(cardSetSize: CardSetSize = 8): Card[] {
+  const cards: Card[] = []
+  const animals = ANIMALS.slice(0, cardSetSize)
+  const disguises = DISGUISES.slice(0, cardSetSize)
+  const locations = LOCATIONS.slice(0, cardSetSize)
+
+  for (const animal of animals) {
+    for (const disguise of disguises) {
+      for (const location of locations) {
         cards.push({
           id: `${animal}-${disguise}-${location}`,
           animal,

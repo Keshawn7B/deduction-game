@@ -1,11 +1,24 @@
-export type RoomStatus = 'lobby' | 'playing' | 'finished'
+import type { StartingCluesMode } from '../game/setup'
+import type { Card, CardSetSize } from './card'
+export type PendingReveal = {
+  playerId: string
+  responderId: string
+  card: Card
+}
+
+export type RoomStatus = 'lobby' | 'setupClues' | 'playing' | 'finished'
 
 export type RoomDoc = {
   roomCode: string
   hostId: string
   status: RoomStatus
   currentTurnPlayerId: string | null
+  manualResponses?: boolean
+  cardSetSize?: CardSetSize
+  startingCluesMode?: StartingCluesMode
+  pendingReveal?: PendingReveal | null
   winnerId: string | null
+  playerCount?: number
   createdAt: unknown
 }
 

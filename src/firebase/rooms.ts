@@ -7,6 +7,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -14,9 +15,11 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { applyWrongGuessPenalty, isCorrectGuess } from '../game/guess'
+import { isCardSetSize } from '../game/deck'
 import { getClueResult } from '../game/rules'
 import { createInitialGameState } from '../game/setup'
-import type { Card, Guess } from '../types/card'
+import type { StartingCluesMode } from '../game/setup'
+import type { Card, CardSetSize, Guess } from '../types/card'
 import type {
   PlayerGameState,
   PlayerIdentityDoc,
@@ -28,16 +31,6 @@ import { createRoomCode, normalizeRoomCode } from '../utils/roomCode'
 import { db } from './client'
 
 const MAX_PLAYERS = 4
-
-type MutableInitialPlayerState = {
-  playerId: string
-  hand: Card[]
-  hiddenIdentity: Card
-  yesPile: Card[]
-  noPile: Card[]
-  wrongGuesses: number
-  eliminated: boolean
-}
 
 function getPlayerSortValue(player: LobbyPlayer): number {
   const joinedAt = player.joinedAt as { seconds?: number } | null
@@ -67,6 +60,70 @@ function drawOne(deck: Card[]) {
   return {
     drawnCard: drawnCard ?? null,
     remainingDeck,
+  }
+}
+
+function isStartingCluesMode(value: unknown): value is StartingCluesMode {
+  return value === 'automatic' || value === 'playerChoice'
+}
+
+async function getEditableLobbyRoom(params: {
+  roomCode: string
+  hostId: string
+  optionName: string
+}) {
+  const roomCode = normalizeRoomCode(params.roomCode)
+  const roomRef = doc(db, 'rooms', roomCode)
+  const roomSnap = await getDoc(roomRef)
+
+  if (!roomSnap.exists()) {
+    throw new Error('Room not found.')
+  }
+
+  const room = roomSnap.data() as RoomDoc
+
+  if (room.hostId !== params.hostId) {
+    throw new Error(`Only the host can change ${params.optionName}.`)
+  }
+
+  if (room.status !== 'lobby') {
+    throw new Error(`${params.optionName} can only be changed in the lobby.`)
+  }
+
+  return { roomRef, room }
+}
+
+function applyRevealResult(params: {
+  playerState: PlayerGameState
+  revealedCard: Card
+  deckState: PrivateDeckDoc
+  result: 'YES' | 'NO'
+}) {
+  const handWithoutCard = params.playerState.hand.filter(
+    (card) => card.id !== params.revealedCard.id,
+  )
+  const { drawnCard, remainingDeck } = drawOne(params.deckState.deck)
+  const nextHand = drawnCard
+    ? [...handWithoutCard, drawnCard]
+    : handWithoutCard
+
+  return {
+    nextPlayerState: {
+      ...params.playerState,
+      hand: nextHand,
+      yesPile:
+        params.result === 'YES'
+          ? [...params.playerState.yesPile, params.revealedCard]
+          : params.playerState.yesPile,
+      noPile:
+        params.result === 'NO'
+          ? [...params.playerState.noPile, params.revealedCard]
+          : params.playerState.noPile,
+    },
+    nextDeckState: {
+      deck: remainingDeck,
+      discardPile: params.deckState.discardPile,
+    },
   }
 }
 
@@ -106,54 +163,6 @@ function getNextActiveTurnPlayerId(params: {
 
   const nextIndex = (currentIndex + 1) % activePlayers.length
   return activePlayers[nextIndex].id
-}
-
-function applyInitialClueExchange(params: {
-  players: LobbyPlayer[]
-  playerStates: MutableInitialPlayerState[]
-  deck: Card[]
-}) {
-  const stateByPlayerId = new Map(
-    params.playerStates.map((state) => [state.playerId, state]),
-  )
-  let deck = [...params.deck]
-
-  for (let index = 0; index < params.players.length; index += 1) {
-    const giver = params.players[index]
-    const receiver = params.players[(index + 1) % params.players.length]
-    const giverState = stateByPlayerId.get(giver.id)
-    const receiverState = stateByPlayerId.get(receiver.id)
-
-    if (!giverState || !receiverState) {
-      continue
-    }
-
-    const [clueCard, ...remainingHand] = giverState.hand
-
-    if (!clueCard) {
-      continue
-    }
-
-    const draw = drawOne(deck)
-    deck = draw.remainingDeck
-
-    giverState.hand = draw.drawnCard
-      ? [...remainingHand, draw.drawnCard]
-      : remainingHand
-
-    const result = getClueResult(clueCard, receiverState.hiddenIdentity)
-
-    if (result === 'YES') {
-      receiverState.yesPile = [...receiverState.yesPile, clueCard]
-    } else {
-      receiverState.noPile = [...receiverState.noPile, clueCard]
-    }
-  }
-
-  return {
-    playerStates: [...stateByPlayerId.values()],
-    deck,
-  }
 }
 
 async function getLobbyPlayers(roomCode: string): Promise<LobbyPlayer[]> {
@@ -196,8 +205,13 @@ export async function createRoom(params: {
       roomCode,
       hostId: params.hostId,
       status: 'lobby',
+      pendingReveal: null,
+      manualResponses: false,
+      cardSetSize: 8,
+      startingCluesMode: 'automatic',
       currentTurnPlayerId: null,
       winnerId: null,
+      playerCount: 1,
       createdAt: serverTimestamp(),
     })
 
@@ -233,41 +247,107 @@ export async function joinRoom(params: {
   }
 
   const roomRef = doc(db, 'rooms', roomCode)
-  const roomSnap = await getDoc(roomRef)
+  const playerRef = doc(db, 'rooms', roomCode, 'players', params.playerId)
 
-  if (!roomSnap.exists()) {
-    throw new Error('Room not found.')
-  }
+  const fallbackPlayers = await getLobbyPlayers(roomCode).catch(() => null)
 
-  const room = roomSnap.data() as RoomDoc
+  await runTransaction(db, async (transaction) => {
+    const [roomSnap, playerSnap] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(playerRef),
+    ])
 
-  if (room.status !== 'lobby') {
-    throw new Error('This game has already started.')
-  }
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
 
-  const playersSnap = await getDocs(collection(db, 'rooms', roomCode, 'players'))
-  const alreadyJoined = playersSnap.docs.some(
-    (player) => player.id === params.playerId,
-  )
+    const room = roomSnap.data() as RoomDoc
 
-  if (!alreadyJoined && playersSnap.size >= MAX_PLAYERS) {
-    throw new Error('This room is full.')
-  }
+    if (room.status !== 'lobby') {
+      throw new Error('This game has already started.')
+    }
 
-  await setDoc(
-    doc(db, 'rooms', roomCode, 'players', params.playerId),
-    {
-      name: playerName,
-      ready: false,
-      isHost: room.hostId === params.playerId,
-      joinedAt: serverTimestamp(),
-      wrongGuesses: 0,
-      eliminated: false,
-    },
-    { merge: true },
-  )
+    const alreadyJoined = playerSnap.exists()
+    const currentPlayerCount =
+      typeof room.playerCount === 'number'
+        ? room.playerCount
+        : fallbackPlayers?.length ?? (alreadyJoined ? 1 : 0)
+
+    if (!alreadyJoined && currentPlayerCount >= MAX_PLAYERS) {
+      throw new Error('This room is full.')
+    }
+
+    transaction.set(
+      playerRef,
+      {
+        name: playerName,
+        ready: false,
+        isHost: room.hostId === params.playerId,
+        joinedAt: serverTimestamp(),
+        wrongGuesses: 0,
+        eliminated: false,
+      },
+      { merge: true },
+    )
+
+    transaction.update(roomRef, {
+      playerCount: alreadyJoined ? currentPlayerCount : currentPlayerCount + 1,
+    })
+  })
 
   return roomCode
+}
+
+export async function setManualResponses(params: {
+  roomCode: string
+  enabled: boolean
+}) {
+  const roomCode = normalizeRoomCode(params.roomCode)
+
+  await updateDoc(doc(db, 'rooms', roomCode), {
+    manualResponses: params.enabled,
+    pendingReveal: null,
+  })
+}
+
+export async function setRoomCardSetSize(params: {
+  roomCode: string
+  hostId: string
+  cardSetSize: CardSetSize
+}) {
+  if (!isCardSetSize(params.cardSetSize)) {
+    throw new Error('Choose 4x4x4, 6x6x6, or 8x8x8 cards.')
+  }
+
+  const { roomRef } = await getEditableLobbyRoom({
+    roomCode: params.roomCode,
+    hostId: params.hostId,
+    optionName: 'card options',
+  })
+
+  await updateDoc(roomRef, {
+    cardSetSize: params.cardSetSize,
+  })
+}
+
+export async function setRoomStartingCluesMode(params: {
+  roomCode: string
+  hostId: string
+  startingCluesMode: StartingCluesMode
+}) {
+  if (!isStartingCluesMode(params.startingCluesMode)) {
+    throw new Error('Choose automatic or player-chosen starting clues.')
+  }
+
+  const { roomRef } = await getEditableLobbyRoom({
+    roomCode: params.roomCode,
+    hostId: params.hostId,
+    optionName: 'starting clue options',
+  })
+
+  await updateDoc(roomRef, {
+    startingCluesMode: params.startingCluesMode,
+  })
 }
 
 export async function startGame(params: {
@@ -276,110 +356,412 @@ export async function startGame(params: {
 }) {
   const roomCode = normalizeRoomCode(params.roomCode)
   const roomRef = doc(db, 'rooms', roomCode)
+  const players = await getLobbyPlayers(roomCode)
+  const playerRefs = players.map((player) =>
+    doc(db, 'rooms', roomCode, 'players', player.id),
+  )
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef)
+
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
+
+    const playerSnaps = await Promise.all(
+      playerRefs.map((playerRef) => transaction.get(playerRef)),
+    )
+
+    const room = roomSnap.data() as RoomDoc
+    const currentPlayerCount = room.playerCount ?? players.length
+
+    if (room.hostId !== params.hostId) {
+      throw new Error('Only the host can start the game.')
+    }
+
+    if (room.status !== 'lobby') {
+      throw new Error('This game has already started.')
+    }
+
+    if (currentPlayerCount !== players.length) {
+      throw new Error('Players changed while starting the game. Try again.')
+    }
+
+    const transactionPlayers = sortPlayers(
+      playerSnaps.map((playerSnap, index) => {
+        if (!playerSnap.exists()) {
+          throw new Error('Players changed while starting the game. Try again.')
+        }
+
+        return {
+          id: players[index].id,
+          ...(playerSnap.data() as Omit<LobbyPlayer, 'id'>),
+        }
+      }),
+    )
+
+    if (transactionPlayers.length < 2 || transactionPlayers.length > 4) {
+      throw new Error('Game requires 2–4 players.')
+    }
+
+    if (!transactionPlayers.every((player) => player.ready)) {
+      throw new Error('Every player must be ready.')
+    }
+
+    const cardSetSize = isCardSetSize(room.cardSetSize ?? 8)
+      ? (room.cardSetSize ?? 8)
+      : 8
+    const startingCluesMode = isStartingCluesMode(room.startingCluesMode)
+      ? room.startingCluesMode
+      : 'automatic'
+    const initialGameState = createInitialGameState(
+      transactionPlayers.map((player) => player.id),
+      Math.random,
+      cardSetSize,
+      { startingClues: startingCluesMode },
+    )
+
+    for (const playerState of initialGameState.players) {
+      const state: PlayerGameState = {
+        playerId: playerState.playerId,
+        hand: playerState.hand,
+        yesPile: playerState.yesPile,
+        noPile: playerState.noPile,
+        hideYesPile: false,
+        hideNoPile: false,
+        wrongGuesses: playerState.wrongGuesses,
+        eliminated: playerState.eliminated,
+      }
+
+      const identity: PlayerIdentityDoc = {
+        playerId: playerState.playerId,
+        hiddenIdentity: playerState.hiddenIdentity,
+      }
+
+      transaction.set(
+        doc(db, 'rooms', roomCode, 'playerStates', playerState.playerId),
+        state,
+      )
+      transaction.set(
+        doc(db, 'rooms', roomCode, 'identities', playerState.playerId),
+        identity,
+      )
+      transaction.update(doc(db, 'rooms', roomCode, 'players', playerState.playerId), {
+        wrongGuesses: 0,
+        eliminated: false,
+      })
+    }
+
+    transaction.set(doc(db, 'rooms', roomCode, 'privateDeck', 'state'), {
+      deck: initialGameState.deck,
+      discardPile: initialGameState.discardPile,
+    })
+
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: 'Game started. Cards were dealt.',
+      createdAt: serverTimestamp(),
+    })
+
+    if (startingCluesMode === 'playerChoice') {
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message:
+          'Setup clues started. Each player must give one YES clue and one NO clue to the next player.',
+        createdAt: serverTimestamp(),
+      })
+    }
+
+    transaction.update(roomRef, {
+      status: startingCluesMode === 'playerChoice' ? 'setupClues' : 'playing',
+      currentTurnPlayerId:
+        startingCluesMode === 'playerChoice'
+          ? null
+          : initialGameState.currentTurnPlayerId,
+    })
+  })
+}
+
+
+export async function submitInitialClues(params: {
+  roomCode: string
+  giverId: string
+  yesCardId: string
+  noCardId: string
+}) {
+  const roomCode = normalizeRoomCode(params.roomCode)
+  const roomRef = doc(db, 'rooms', roomCode)
+
+  if (params.yesCardId === params.noCardId) {
+    throw new Error('Pick two different cards.')
+  }
+
+  const players = await getLobbyPlayers(roomCode)
+  const sortedPlayers = sortPlayers(players)
+
+  if (sortedPlayers.length < 2) {
+    throw new Error('Need at least two players.')
+  }
+
+  const giverIndex = sortedPlayers.findIndex(
+    (player) => player.id === params.giverId,
+  )
+
+  if (giverIndex === -1) {
+    throw new Error('You are not in this room.')
+  }
+
+  const receiver = sortedPlayers[(giverIndex + 1) % sortedPlayers.length]
+  const giverStateRef = doc(db, 'rooms', roomCode, 'playerStates', params.giverId)
+  const receiverStateRef = doc(db, 'rooms', roomCode, 'playerStates', receiver.id)
+  const receiverIdentityRef = doc(db, 'rooms', roomCode, 'identities', receiver.id)
+  const deckRef = doc(db, 'rooms', roomCode, 'privateDeck', 'state')
+  const assignmentRef = doc(db, 'rooms', roomCode, 'initialClues', params.giverId)
+  const assignmentRefs = sortedPlayers.map((player) =>
+    doc(db, 'rooms', roomCode, 'initialClues', player.id),
+  )
+
+  await runTransaction(db, async (transaction) => {
+    const [
+      roomSnap,
+      giverStateSnap,
+      receiverStateSnap,
+      receiverIdentitySnap,
+      deckSnap,
+      assignmentSnap,
+      ...assignmentSnaps
+    ] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(giverStateRef),
+      transaction.get(receiverStateRef),
+      transaction.get(receiverIdentityRef),
+      transaction.get(deckRef),
+      transaction.get(assignmentRef),
+      ...assignmentRefs.map((ref) => transaction.get(ref)),
+    ])
+
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
+
+    const room = roomSnap.data() as RoomDoc
+
+    if (room.status !== 'setupClues') {
+      throw new Error('Starting clues are not being selected right now.')
+    }
+
+    if (assignmentSnap.exists()) {
+      throw new Error('You already picked starting clues.')
+    }
+
+    if (!giverStateSnap.exists() || !receiverStateSnap.exists()) {
+      throw new Error('Player state not found.')
+    }
+
+    if (!receiverIdentitySnap.exists()) {
+      throw new Error('Target identity not found.')
+    }
+
+    if (!deckSnap.exists()) {
+      throw new Error('Deck not found.')
+    }
+
+    const giverState = giverStateSnap.data() as PlayerGameState
+    const receiverState = receiverStateSnap.data() as PlayerGameState
+    const receiverIdentity = receiverIdentitySnap.data() as PlayerIdentityDoc
+    const deckState = deckSnap.data() as PrivateDeckDoc
+
+    const yesCard = giverState.hand.find((card) => card.id === params.yesCardId)
+    const noCard = giverState.hand.find((card) => card.id === params.noCardId)
+
+    if (!yesCard || !noCard) {
+      throw new Error('Both starting clues must come from your hand.')
+    }
+
+    const yesResult = getClueResult(yesCard, receiverIdentity.hiddenIdentity)
+    const noResult = getClueResult(noCard, receiverIdentity.hiddenIdentity)
+
+    if (yesResult !== 'YES') {
+      throw new Error('The YES clue does not match that player’s hidden card.')
+    }
+
+    if (noResult !== 'NO') {
+      throw new Error('The NO clue still matches that player’s hidden card.')
+    }
+
+    let remainingDeck = [...deckState.deck]
+    let nextHand = giverState.hand.filter(
+      (card) => card.id !== yesCard.id && card.id !== noCard.id,
+    )
+
+    for (let index = 0; index < 2; index += 1) {
+      const draw = drawOne(remainingDeck)
+      remainingDeck = draw.remainingDeck
+
+      if (draw.drawnCard) {
+        nextHand = [...nextHand, draw.drawnCard]
+      }
+    }
+
+    const nextGiverState: PlayerGameState = {
+      ...giverState,
+      hand: nextHand,
+    }
+
+    const nextReceiverState: PlayerGameState = {
+      ...receiverState,
+      yesPile: [...receiverState.yesPile, yesCard],
+      noPile: [...receiverState.noPile, noCard],
+    }
+
+    const completedGiverIds = new Set(
+      assignmentSnaps
+        .filter((assignmentDoc) => assignmentDoc.exists())
+        .map((assignmentDoc) => assignmentDoc.id),
+    )
+    completedGiverIds.add(params.giverId)
+
+    const allSetupCluesDone = sortedPlayers.every((player) =>
+      completedGiverIds.has(player.id),
+    )
+
+    const giverName =
+      sortedPlayers.find((player) => player.id === params.giverId)?.name ??
+      'A player'
+    const receiverName = receiver.name
+
+    transaction.set(giverStateRef, nextGiverState)
+    transaction.set(receiverStateRef, nextReceiverState)
+    transaction.set(deckRef, {
+      deck: remainingDeck,
+      discardPile: deckState.discardPile,
+    })
+    transaction.set(assignmentRef, {
+      giverId: params.giverId,
+      receiverId: receiver.id,
+      createdAt: serverTimestamp(),
+    })
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${giverName} picked starting clues for ${receiverName}.`,
+      createdAt: serverTimestamp(),
+    })
+
+    if (allSetupCluesDone) {
+      transaction.update(roomRef, {
+        status: 'playing',
+        currentTurnPlayerId: sortedPlayers[0].id,
+      })
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: 'All starting clues are ready. The game begins.',
+        createdAt: serverTimestamp(),
+      })
+    }
+  })
+}
+
+export async function revealCard(params: {
+  roomCode: string
+  playerId: string
+  cardId: string
+}) {
+  const roomCode = normalizeRoomCode(params.roomCode)
+  const roomRef = doc(db, 'rooms', roomCode)
+  const playerStateRef = doc(
+    db,
+    'rooms',
+    roomCode,
+    'playerStates',
+    params.playerId,
+  )
+
   const roomSnap = await getDoc(roomRef)
 
   if (!roomSnap.exists()) {
     throw new Error('Room not found.')
   }
 
-  const room = roomSnap.data() as RoomDoc
+  const initialRoom = roomSnap.data() as RoomDoc
 
-  if (room.hostId !== params.hostId) {
-    throw new Error('Only the host can start the game.')
+  if (!initialRoom.manualResponses) {
+    return revealCardAutomatic(params)
   }
 
-  if (room.status !== 'lobby') {
-    throw new Error('This game has already started.')
-  }
+  const players = sortPlayers(await getLobbyPlayers(roomCode))
 
-  const players = await getLobbyPlayers(roomCode)
+  const result = await runTransaction(db, async (transaction) => {
+    const [transactionRoomSnap, playerStateSnap] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(playerStateRef),
+    ])
 
-  if (players.length < 2 || players.length > 4) {
-    throw new Error('Game requires 2–4 players.')
-  }
-
-  if (!players.every((player) => player.ready)) {
-    throw new Error('Every player must be ready.')
-  }
-
-  const initialGameState = createInitialGameState(
-    players.map((player) => player.id),
-  )
-
-  const initialExchange = applyInitialClueExchange({
-    players,
-    playerStates: initialGameState.players.map((state) => ({
-      playerId: state.playerId,
-      hand: [...state.hand],
-      hiddenIdentity: state.hiddenIdentity,
-      yesPile: [...state.yesPile],
-      noPile: [...state.noPile],
-      wrongGuesses: state.wrongGuesses,
-      eliminated: state.eliminated,
-    })),
-    deck: initialGameState.deck,
-  })
-
-  const batch = writeBatch(db)
-
-  for (const playerState of initialExchange.playerStates) {
-    const state: PlayerGameState = {
-      playerId: playerState.playerId,
-      hand: playerState.hand,
-      yesPile: playerState.yesPile,
-      noPile: playerState.noPile,
-      hideYesPile: false,
-      hideNoPile: false,
-      wrongGuesses: playerState.wrongGuesses,
-      eliminated: playerState.eliminated,
+    if (!transactionRoomSnap.exists()) {
+      throw new Error('Room not found.')
     }
 
-    const identity: PlayerIdentityDoc = {
-      playerId: playerState.playerId,
-      hiddenIdentity: playerState.hiddenIdentity,
+    const room = transactionRoomSnap.data() as RoomDoc
+
+    if (!room.manualResponses) {
+      throw new Error('Manual responses are not enabled for this room.')
     }
 
-    batch.set(
-      doc(db, 'rooms', roomCode, 'playerStates', playerState.playerId),
-      state,
+    if (room.status !== 'playing') {
+      throw new Error('You can only reveal cards during regular play.')
+    }
+
+    if (room.currentTurnPlayerId !== params.playerId) {
+      throw new Error('It is not your turn.')
+    }
+
+    if (room.pendingReveal) {
+      throw new Error('A revealed card is already waiting for an answer.')
+    }
+
+    if (!playerStateSnap.exists()) {
+      throw new Error('Player state not found.')
+    }
+
+    const playerState = playerStateSnap.data() as PlayerGameState
+
+    if (playerState.eliminated) {
+      throw new Error('You are eliminated.')
+    }
+
+    const revealedCard = playerState.hand.find((card) => card.id === params.cardId)
+
+    if (!revealedCard) {
+      throw new Error('Card not found in your hand.')
+    }
+
+    const activePlayers = players.filter((player) => !(player.eliminated ?? false))
+    const currentIndex = activePlayers.findIndex(
+      (player) => player.id === params.playerId,
     )
 
-    batch.set(
-      doc(db, 'rooms', roomCode, 'identities', playerState.playerId),
-      identity,
-    )
+    if (currentIndex === -1 || activePlayers.length < 2) {
+      throw new Error('No other active player can answer.')
+    }
 
-    batch.update(doc(db, 'rooms', roomCode, 'players', playerState.playerId), {
-      wrongGuesses: 0,
-      eliminated: false,
+    const responder = activePlayers[(currentIndex + 1) % activePlayers.length]
+    const revealer = activePlayers[currentIndex]
+
+    transaction.update(roomRef, {
+      pendingReveal: {
+        playerId: params.playerId,
+        responderId: responder.id,
+        card: revealedCard,
+      },
     })
-  }
 
-  batch.set(doc(db, 'rooms', roomCode, 'privateDeck', 'state'), {
-    deck: initialExchange.deck,
-    discardPile: initialGameState.discardPile,
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${revealer.name} revealed a card. Waiting for ${responder.name} to answer YES or NO.`,
+      createdAt: serverTimestamp(),
+    })
+
+    return 'PENDING' as const
   })
 
-  batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-    message: 'Game started. Cards were dealt.',
-    createdAt: serverTimestamp(),
-  })
-
-  batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-    message:
-      'Initial clues were exchanged. Each player gave one card to the player on their left.',
-    createdAt: serverTimestamp(),
-  })
-
-  batch.update(roomRef, {
-    status: 'playing',
-    currentTurnPlayerId: initialGameState.currentTurnPlayerId,
-  })
-
-  await batch.commit()
+  return result
 }
 
-export async function revealCard(params: {
+async function revealCardAutomatic(params: {
   roomCode: string
   playerId: string
   cardId: string
@@ -390,102 +772,194 @@ export async function revealCard(params: {
   const identityRef = doc(db, 'rooms', roomCode, 'identities', params.playerId)
   const deckRef = doc(db, 'rooms', roomCode, 'privateDeck', 'state')
 
-  const [roomSnap, playerStateSnap, identitySnap, deckSnap, players, states] =
-    await Promise.all([
-      getDoc(roomRef),
-      getDoc(playerStateRef),
-      getDoc(identityRef),
-      getDoc(deckRef),
-      getLobbyPlayers(roomCode),
-      getPlayerStates(roomCode),
+  const players = await getLobbyPlayers(roomCode)
+  const states = await getPlayerStates(roomCode)
+
+  const result = await runTransaction(db, async (transaction) => {
+    const [roomSnap, playerStateSnap, identitySnap, deckSnap] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(playerStateRef),
+      transaction.get(identityRef),
+      transaction.get(deckRef),
     ])
 
-  if (!roomSnap.exists()) {
-    throw new Error('Room not found.')
-  }
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
 
-  if (!playerStateSnap.exists()) {
-    throw new Error('Player state not found.')
-  }
+    if (!playerStateSnap.exists()) {
+      throw new Error('Player state not found.')
+    }
 
-  if (!identitySnap.exists()) {
-    throw new Error('Identity not found.')
-  }
+    if (!identitySnap.exists()) {
+      throw new Error('Identity not found.')
+    }
 
-  if (!deckSnap.exists()) {
-    throw new Error('Deck not found.')
-  }
+    if (!deckSnap.exists()) {
+      throw new Error('Deck not found.')
+    }
 
-  const room = roomSnap.data() as RoomDoc
-  const playerState = playerStateSnap.data() as PlayerGameState
-  const identity = identitySnap.data() as PlayerIdentityDoc
-  const deckState = deckSnap.data() as PrivateDeckDoc
+    const room = roomSnap.data() as RoomDoc
 
-  if (room.status !== 'playing') {
-    throw new Error('The game is not currently active.')
-  }
+    const playerState = playerStateSnap.data() as PlayerGameState
+    const identity = identitySnap.data() as PlayerIdentityDoc
+    const deckState = deckSnap.data() as PrivateDeckDoc
 
-  if (room.currentTurnPlayerId !== params.playerId) {
-    throw new Error('It is not your turn.')
-  }
+    if (room.status !== 'playing') {
+      throw new Error('The game is not currently active.')
+    }
 
-  if (playerState.eliminated) {
-    throw new Error('You are eliminated.')
-  }
+    if (room.currentTurnPlayerId !== params.playerId) {
+      throw new Error('It is not your turn.')
+    }
 
-  const revealedCard = playerState.hand.find((card) => card.id === params.cardId)
+    if (playerState.eliminated) {
+      throw new Error('You are eliminated.')
+    }
 
-  if (!revealedCard) {
-    throw new Error('Card is not in your hand.')
-  }
+    const revealedCard = playerState.hand.find((card) => card.id === params.cardId)
 
-  const result = getClueResult(revealedCard, identity.hiddenIdentity)
-  const handWithoutCard = playerState.hand.filter(
-    (card) => card.id !== params.cardId,
-  )
-  const { drawnCard, remainingDeck } = drawOne(deckState.deck)
-  const nextHand = drawnCard ? [...handWithoutCard, drawnCard] : handWithoutCard
+    if (!revealedCard) {
+      throw new Error('Card is not in your hand.')
+    }
 
-  const nextPlayerState: PlayerGameState = {
-    ...playerState,
-    hand: nextHand,
-    yesPile:
-      result === 'YES'
-        ? [...playerState.yesPile, revealedCard]
-        : playerState.yesPile,
-    noPile:
-      result === 'NO'
-        ? [...playerState.noPile, revealedCard]
-        : playerState.noPile,
-  }
+    const revealResult = getClueResult(revealedCard, identity.hiddenIdentity)
+    const { nextPlayerState, nextDeckState } = applyRevealResult({
+      playerState,
+      revealedCard,
+      deckState,
+      result: revealResult,
+    })
 
-  const nextDeckState: PrivateDeckDoc = {
-    deck: remainingDeck,
-    discardPile: deckState.discardPile,
-  }
+    const nextTurnPlayerId = getNextActiveTurnPlayerId({
+      players,
+      states,
+      currentPlayerId: params.playerId,
+      currentPlayerNextState: nextPlayerState,
+    })
+    const playerName =
+      players.find((player) => player.id === params.playerId)?.name ?? 'A player'
 
-  const nextTurnPlayerId = getNextActiveTurnPlayerId({
-    players,
-    states,
-    currentPlayerId: params.playerId,
-    currentPlayerNextState: nextPlayerState,
-  })
-  const playerName =
-    players.find((player) => player.id === params.playerId)?.name ?? 'A player'
+    transaction.set(playerStateRef, nextPlayerState)
+    transaction.set(deckRef, nextDeckState)
+    transaction.update(roomRef, {
+      currentTurnPlayerId: nextTurnPlayerId,
+    })
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${playerName} revealed a card. Result: ${revealResult}.`,
+      createdAt: serverTimestamp(),
+    })
 
-  const batch = writeBatch(db)
-
-  batch.set(playerStateRef, nextPlayerState)
-  batch.set(deckRef, nextDeckState)
-  batch.update(roomRef, {
-    currentTurnPlayerId: nextTurnPlayerId,
-  })
-  batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-    message: `${playerName} revealed a card. Result: ${result}.`,
-    createdAt: serverTimestamp(),
+    return revealResult
   })
 
-  await batch.commit()
+  return result
+}
+
+export async function submitRevealResponse(params: {
+  roomCode: string
+  responderId: string
+  result: 'YES' | 'NO'
+}) {
+  const roomCode = normalizeRoomCode(params.roomCode)
+  const roomRef = doc(db, 'rooms', roomCode)
+  const deckRef = doc(db, 'rooms', roomCode, 'privateDeck', 'state')
+  const players = sortPlayers(await getLobbyPlayers(roomCode))
+  const states = await getPlayerStates(roomCode)
+
+  const result = await runTransaction(db, async (transaction) => {
+    const [roomSnap, deckSnap] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(deckRef),
+    ])
+
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
+
+    const room = roomSnap.data() as RoomDoc
+
+    if (!room.manualResponses) {
+      throw new Error('Manual responses are not enabled for this room.')
+    }
+
+    if (room.status !== 'playing') {
+      throw new Error('You can only answer during regular play.')
+    }
+
+    if (!room.pendingReveal) {
+      throw new Error('No revealed card is waiting for an answer.')
+    }
+
+    if (room.pendingReveal.responderId !== params.responderId) {
+      throw new Error('You are not the player answering this card.')
+    }
+
+    if (!deckSnap.exists()) {
+      throw new Error('Deck not found.')
+    }
+
+    const revealedCard = room.pendingReveal.card
+    const revealerId = room.pendingReveal.playerId
+    const revealerStateRef = doc(
+      db,
+      'rooms',
+      roomCode,
+      'playerStates',
+      revealerId,
+    )
+    const revealerStateSnap = await transaction.get(revealerStateRef)
+
+    if (!revealerStateSnap.exists()) {
+      throw new Error('Revealing player state not found.')
+    }
+
+    const revealerState = revealerStateSnap.data() as PlayerGameState
+    const deckState = deckSnap.data() as PrivateDeckDoc
+
+    const cardStillInHand = revealerState.hand.some(
+      (card) => card.id === revealedCard.id,
+    )
+
+    if (!cardStillInHand) {
+      throw new Error('The revealed card is no longer in that player’s hand.')
+    }
+
+    const { nextPlayerState: nextRevealerState, nextDeckState } =
+      applyRevealResult({
+        playerState: revealerState,
+        revealedCard,
+        deckState,
+        result: params.result,
+      })
+
+    const nextTurnPlayerId = getNextActiveTurnPlayerId({
+      players,
+      states,
+      currentPlayerId: revealerId,
+      currentPlayerNextState: nextRevealerState,
+    })
+
+    const responderName =
+      players.find((player) => player.id === params.responderId)?.name ??
+      'A player'
+    const revealerName =
+      players.find((player) => player.id === revealerId)?.name ?? 'a player'
+
+    transaction.set(revealerStateRef, nextRevealerState)
+    transaction.set(deckRef, nextDeckState)
+    transaction.update(roomRef, {
+      pendingReveal: null,
+      currentTurnPlayerId: nextTurnPlayerId,
+    })
+
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${responderName} answered ${params.result} for ${revealerName}'s revealed card.`,
+      createdAt: serverTimestamp(),
+    })
+
+    return params.result
+  })
 
   return result
 }
@@ -500,166 +974,159 @@ export async function makeGuess(params: {
   const playerStateRef = doc(db, 'rooms', roomCode, 'playerStates', params.playerId)
   const identityRef = doc(db, 'rooms', roomCode, 'identities', params.playerId)
 
-  const [roomSnap, playerStateSnap, identitySnap, players, states] =
-    await Promise.all([
-      getDoc(roomRef),
-      getDoc(playerStateRef),
-      getDoc(identityRef),
-      getLobbyPlayers(roomCode),
-      getPlayerStates(roomCode),
+  const players = await getLobbyPlayers(roomCode)
+  const states = await getPlayerStates(roomCode)
+
+  return runTransaction(db, async (transaction) => {
+    const [roomSnap, playerStateSnap, identitySnap] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(playerStateRef),
+      transaction.get(identityRef),
     ])
 
-  if (!roomSnap.exists()) {
-    throw new Error('Room not found.')
-  }
-
-  if (!playerStateSnap.exists()) {
-    throw new Error('Player state not found.')
-  }
-
-  if (!identitySnap.exists()) {
-    throw new Error('Identity not found.')
-  }
-
-  const room = roomSnap.data() as RoomDoc
-  const playerState = playerStateSnap.data() as PlayerGameState
-  const identity = identitySnap.data() as PlayerIdentityDoc
-
-  if (room.status !== 'playing') {
-    throw new Error('The game is not currently active.')
-  }
-
-  if (room.currentTurnPlayerId !== params.playerId) {
-    throw new Error('It is not your turn.')
-  }
-
-  if (playerState.eliminated) {
-    throw new Error('You are eliminated.')
-  }
-
-  const playerName =
-    players.find((player) => player.id === params.playerId)?.name ?? 'A player'
-
-  const correct = isCorrectGuess(identity.hiddenIdentity, params.guess)
-  const batch = writeBatch(db)
-
-  if (correct) {
-    batch.update(roomRef, {
-      status: 'finished',
-      winnerId: params.playerId,
-      currentTurnPlayerId: null,
-    })
-
-    batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-      message: `${playerName} guessed correctly and won the game.`,
-      createdAt: serverTimestamp(),
-    })
-
-    await batch.commit()
-
-    return {
-      correct: true,
-      eliminated: false,
-      wrongGuesses: playerState.wrongGuesses,
-      gameFinished: true,
-      winnerId: params.playerId,
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
     }
-  }
 
-  const penalty = applyWrongGuessPenalty(playerState.wrongGuesses)
+    if (!playerStateSnap.exists()) {
+      throw new Error('Player state not found.')
+    }
 
-  const nextPlayerState: PlayerGameState = {
-    ...playerState,
-    wrongGuesses: penalty.wrongGuesses,
-    hideYesPile: penalty.hideYesPile,
-    hideNoPile: penalty.hideNoPile,
-    eliminated: penalty.eliminated,
-  }
+    if (!identitySnap.exists()) {
+      throw new Error('Identity not found.')
+    }
 
-  const stateByPlayerId = new Map(states.map((state) => [state.playerId, state]))
-  stateByPlayerId.set(params.playerId, nextPlayerState)
+    const room = roomSnap.data() as RoomDoc
+    const playerState = playerStateSnap.data() as PlayerGameState
+    const identity = identitySnap.data() as PlayerIdentityDoc
 
-  const activePlayersAfterGuess = players.filter((player) => {
-    const state = stateByPlayerId.get(player.id)
-    return !state?.eliminated
-  })
+    if (room.status !== 'playing') {
+      throw new Error('The game is not currently active.')
+    }
 
-  batch.set(playerStateRef, nextPlayerState)
+    if (room.currentTurnPlayerId !== params.playerId) {
+      throw new Error('It is not your turn.')
+    }
 
-  if (activePlayersAfterGuess.length === 1) {
-    const winner = activePlayersAfterGuess[0]
-    const winnerName = winner?.name ?? 'The remaining player'
+    if (playerState.eliminated) {
+      throw new Error('You are eliminated.')
+    }
 
-    batch.update(roomRef, {
-      status: 'finished',
-      winnerId: winner?.id ?? null,
-      currentTurnPlayerId: null,
+    const playerName =
+      players.find((player) => player.id === params.playerId)?.name ?? 'A player'
+
+    const correct = isCorrectGuess(identity.hiddenIdentity, params.guess)
+
+    if (correct) {
+      transaction.update(roomRef, {
+        status: 'finished',
+        winnerId: params.playerId,
+        currentTurnPlayerId: null,
+      })
+
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: `${playerName} guessed correctly and won the game.`,
+        createdAt: serverTimestamp(),
+      })
+
+      return {
+        correct: true,
+        eliminated: false,
+        wrongGuesses: playerState.wrongGuesses,
+        gameFinished: true,
+        winnerId: params.playerId,
+      }
+    }
+
+    const penalty = applyWrongGuessPenalty(playerState.wrongGuesses)
+
+    const nextPlayerState: PlayerGameState = {
+      ...playerState,
+      wrongGuesses: penalty.wrongGuesses,
+      hideYesPile: penalty.hideYesPile,
+      hideNoPile: penalty.hideNoPile,
+      eliminated: penalty.eliminated,
+    }
+
+    const stateByPlayerId = new Map(states.map((state) => [state.playerId, state]))
+    stateByPlayerId.set(params.playerId, nextPlayerState)
+
+    const activePlayersAfterGuess = players.filter((player) => {
+      const state = stateByPlayerId.get(player.id)
+      return !state?.eliminated
     })
 
-    batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-      message: `${playerName} was eliminated. ${winnerName} wins as the last remaining player.`,
+    transaction.set(playerStateRef, nextPlayerState)
+
+    if (activePlayersAfterGuess.length === 1) {
+      const winner = activePlayersAfterGuess[0]
+      const winnerName = winner?.name ?? 'The remaining player'
+
+      transaction.update(roomRef, {
+        status: 'finished',
+        winnerId: winner?.id ?? null,
+        currentTurnPlayerId: null,
+      })
+
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: `${playerName} was eliminated. ${winnerName} wins as the last remaining player.`,
+        createdAt: serverTimestamp(),
+      })
+
+      return {
+        correct: false,
+        eliminated: true,
+        wrongGuesses: penalty.wrongGuesses,
+        gameFinished: true,
+        winnerId: winner?.id ?? null,
+      }
+    }
+
+    if (activePlayersAfterGuess.length === 0) {
+      transaction.update(roomRef, {
+        status: 'finished',
+        winnerId: null,
+        currentTurnPlayerId: null,
+      })
+
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: `${playerName} was eliminated. No active players remain.`,
+        createdAt: serverTimestamp(),
+      })
+
+      return {
+        correct: false,
+        eliminated: true,
+        wrongGuesses: penalty.wrongGuesses,
+        gameFinished: true,
+        winnerId: null,
+      }
+    }
+
+    const nextTurnPlayerId = getNextActiveTurnPlayerId({
+      players,
+      states,
+      currentPlayerId: params.playerId,
+      currentPlayerNextState: nextPlayerState,
+    })
+
+    transaction.update(roomRef, {
+      currentTurnPlayerId: nextTurnPlayerId,
+    })
+
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${playerName} guessed incorrectly. Wrong guesses: ${penalty.wrongGuesses}.`,
       createdAt: serverTimestamp(),
     })
-
-    await batch.commit()
 
     return {
       correct: false,
-      eliminated: true,
+      eliminated: penalty.eliminated,
       wrongGuesses: penalty.wrongGuesses,
-      gameFinished: true,
-      winnerId: winner?.id ?? null,
-    }
-  }
-
-  if (activePlayersAfterGuess.length === 0) {
-    batch.update(roomRef, {
-      status: 'finished',
-      winnerId: null,
-      currentTurnPlayerId: null,
-    })
-
-    batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-      message: `${playerName} was eliminated. No active players remain.`,
-      createdAt: serverTimestamp(),
-    })
-
-    await batch.commit()
-
-    return {
-      correct: false,
-      eliminated: true,
-      wrongGuesses: penalty.wrongGuesses,
-      gameFinished: true,
+      gameFinished: false,
       winnerId: null,
     }
-  }
-
-  const nextTurnPlayerId = getNextActiveTurnPlayerId({
-    players,
-    states,
-    currentPlayerId: params.playerId,
-    currentPlayerNextState: nextPlayerState,
   })
-
-  batch.update(roomRef, {
-    currentTurnPlayerId: nextTurnPlayerId,
-  })
-
-  batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-    message: `${playerName} guessed incorrectly. Wrong guesses: ${penalty.wrongGuesses}.`,
-    createdAt: serverTimestamp(),
-  })
-
-  await batch.commit()
-
-  return {
-    correct: false,
-    eliminated: penalty.eliminated,
-    wrongGuesses: penalty.wrongGuesses,
-    gameFinished: false,
-    winnerId: null,
-  }
 }
 
 export async function removePlayerFromLobby(params: {
@@ -669,26 +1136,6 @@ export async function removePlayerFromLobby(params: {
 }) {
   const roomCode = normalizeRoomCode(params.roomCode)
   const roomRef = doc(db, 'rooms', roomCode)
-  const roomSnap = await getDoc(roomRef)
-
-  if (!roomSnap.exists()) {
-    throw new Error('Room not found.')
-  }
-
-  const room = roomSnap.data() as RoomDoc
-
-  if (room.status !== 'lobby') {
-    throw new Error('Players can only be removed before the game starts.')
-  }
-
-  if (room.hostId !== params.hostId) {
-    throw new Error('Only the host can remove players.')
-  }
-
-  if (params.hostId === params.targetPlayerId) {
-    throw new Error('Host cannot remove themselves. Use Leave Room instead.')
-  }
-
   const targetPlayerRef = doc(
     db,
     'rooms',
@@ -696,23 +1143,46 @@ export async function removePlayerFromLobby(params: {
     'players',
     params.targetPlayerId,
   )
-  const targetPlayerSnap = await getDoc(targetPlayerRef)
+  await runTransaction(db, async (transaction) => {
+    const [roomSnap, targetPlayerSnap] = await Promise.all([
+      transaction.get(roomRef),
+      transaction.get(targetPlayerRef),
+    ])
 
-  if (!targetPlayerSnap.exists()) {
-    throw new Error('Player not found.')
-  }
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
 
-  const targetPlayer = targetPlayerSnap.data() as Omit<LobbyPlayer, 'id'>
+    const room = roomSnap.data() as RoomDoc
 
-  const batch = writeBatch(db)
+    if (room.status !== 'lobby') {
+      throw new Error('Players can only be removed before the game starts.')
+    }
 
-  batch.delete(targetPlayerRef)
-  batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-    message: `${targetPlayer.name} was removed from the lobby by the host.`,
-    createdAt: serverTimestamp(),
+    if (room.hostId !== params.hostId) {
+      throw new Error('Only the host can remove players.')
+    }
+
+    if (params.hostId === params.targetPlayerId) {
+      throw new Error('Host cannot remove themselves. Use Leave Room instead.')
+    }
+
+    if (!targetPlayerSnap.exists()) {
+      throw new Error('Player not found.')
+    }
+
+    const targetPlayer = targetPlayerSnap.data() as Omit<LobbyPlayer, 'id'>
+    const nextPlayerCount = Math.max((room.playerCount ?? 1) - 1, 0)
+
+    transaction.delete(targetPlayerRef)
+    transaction.update(roomRef, {
+      playerCount: nextPlayerCount,
+    })
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${targetPlayer.name} was removed from the lobby by the host.`,
+      createdAt: serverTimestamp(),
+    })
   })
-
-  await batch.commit()
 }
 
 export async function resetRoomForRematch(params: {
@@ -739,11 +1209,12 @@ export async function resetRoomForRematch(params: {
 
   const players = await getLobbyPlayers(roomCode)
 
-  const [statesSnap, identitiesSnap, deckSnap, logSnap] = await Promise.all([
+  const [statesSnap, identitiesSnap, deckSnap, logSnap, initialCluesSnap] = await Promise.all([
     getDocs(collection(db, 'rooms', roomCode, 'playerStates')),
     getDocs(collection(db, 'rooms', roomCode, 'identities')),
     getDocs(collection(db, 'rooms', roomCode, 'privateDeck')),
     getDocs(collection(db, 'rooms', roomCode, 'log')),
+    getDocs(collection(db, 'rooms', roomCode, 'initialClues')),
   ])
 
   const batch = writeBatch(db)
@@ -762,6 +1233,10 @@ export async function resetRoomForRematch(params: {
 
   for (const logDoc of logSnap.docs) {
     batch.delete(logDoc.ref)
+  }
+
+  for (const initialClueDoc of initialCluesSnap.docs) {
+    batch.delete(initialClueDoc.ref)
   }
 
   for (const player of players) {
@@ -788,172 +1263,172 @@ export async function leaveGame(params: {
 }) {
   const roomCode = normalizeRoomCode(params.roomCode)
   const roomRef = doc(db, 'rooms', roomCode)
-  const roomSnap = await getDoc(roomRef)
-
-  if (!roomSnap.exists()) {
-    throw new Error('Room not found.')
-  }
-
-  const room = roomSnap.data() as RoomDoc
+  const playerRef = doc(db, 'rooms', roomCode, 'players', params.playerId)
+  const playerStateRef = doc(db, 'rooms', roomCode, 'playerStates', params.playerId)
   const players = await getLobbyPlayers(roomCode)
+  const states = await getPlayerStates(roomCode)
   const leavingPlayer = players.find((player) => player.id === params.playerId)
   const playerName = leavingPlayer?.name ?? 'A player'
   const remainingPlayers = players.filter((player) => player.id !== params.playerId)
 
-  const batch = writeBatch(db)
+  return runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef)
 
-  if (room.status === 'lobby') {
-    batch.delete(doc(db, 'rooms', roomCode, 'players', params.playerId))
+    if (!roomSnap.exists()) {
+      throw new Error('Room not found.')
+    }
 
-    if (remainingPlayers.length === 0) {
-      batch.update(roomRef, {
-        status: 'finished',
-        currentTurnPlayerId: null,
-        winnerId: null,
+    const room = roomSnap.data() as RoomDoc
+
+    if (room.status === 'lobby') {
+      transaction.delete(playerRef)
+
+      if (remainingPlayers.length === 0) {
+        transaction.update(roomRef, {
+          status: 'finished',
+          currentTurnPlayerId: null,
+          winnerId: null,
+          playerCount: 0,
+        })
+      } else if (room.hostId === params.playerId) {
+        const nextHost = remainingPlayers[0]
+
+        transaction.update(roomRef, {
+          hostId: nextHost.id,
+          playerCount: remainingPlayers.length,
+        })
+
+        transaction.update(doc(db, 'rooms', roomCode, 'players', nextHost.id), {
+          isHost: true,
+        })
+      } else {
+        transaction.update(roomRef, {
+          playerCount: remainingPlayers.length,
+        })
+      }
+
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: `${playerName} left the lobby.`,
+        createdAt: serverTimestamp(),
       })
-    } else if (room.hostId === params.playerId) {
+
+      return {
+        gameFinished: remainingPlayers.length === 0,
+        winnerId: null,
+      }
+    }
+
+    if (room.status !== 'playing') {
+      return {
+        gameFinished: room.status === 'finished',
+        winnerId: room.winnerId,
+      }
+    }
+
+    const currentStateSnap = await transaction.get(playerStateRef)
+
+    if (!currentStateSnap.exists()) {
+      throw new Error('Player state not found.')
+    }
+
+    const currentState = currentStateSnap.data() as PlayerGameState
+
+    const nextPlayerState: PlayerGameState = {
+      ...currentState,
+      hand: [],
+      hideYesPile: true,
+      hideNoPile: true,
+      eliminated: true,
+    }
+
+    const stateByPlayerId = new Map(states.map((state) => [state.playerId, state]))
+    stateByPlayerId.set(params.playerId, nextPlayerState)
+
+    const activePlayersAfterLeave = players.filter((player) => {
+      const state = stateByPlayerId.get(player.id)
+      return !state?.eliminated
+    })
+
+    transaction.set(playerStateRef, nextPlayerState)
+
+    transaction.update(playerRef, {
+      eliminated: true,
+    })
+
+    if (room.hostId === params.playerId && remainingPlayers.length > 0) {
       const nextHost = remainingPlayers[0]
 
-      batch.update(roomRef, {
+      transaction.update(roomRef, {
         hostId: nextHost.id,
       })
 
-      batch.update(doc(db, 'rooms', roomCode, 'players', nextHost.id), {
+      transaction.update(doc(db, 'rooms', roomCode, 'players', nextHost.id), {
         isHost: true,
       })
     }
 
-    batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-      message: `${playerName} left the lobby.`,
+    if (activePlayersAfterLeave.length === 1) {
+      const winner = activePlayersAfterLeave[0]
+      const winnerName = winner?.name ?? 'The remaining player'
+
+      transaction.update(roomRef, {
+        status: 'finished',
+        winnerId: winner?.id ?? null,
+        currentTurnPlayerId: null,
+      })
+
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: `${playerName} left the game. ${winnerName} wins as the last remaining player.`,
+        createdAt: serverTimestamp(),
+      })
+
+      return {
+        gameFinished: true,
+        winnerId: winner?.id ?? null,
+      }
+    }
+
+    if (activePlayersAfterLeave.length === 0) {
+      transaction.update(roomRef, {
+        status: 'finished',
+        winnerId: null,
+        currentTurnPlayerId: null,
+      })
+
+      transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+        message: `${playerName} left the game. No active players remain.`,
+        createdAt: serverTimestamp(),
+      })
+
+      return {
+        gameFinished: true,
+        winnerId: null,
+      }
+    }
+
+    if (room.currentTurnPlayerId === params.playerId) {
+      const nextTurnPlayerId = getNextActiveTurnPlayerId({
+        players,
+        states,
+        currentPlayerId: params.playerId,
+        currentPlayerNextState: nextPlayerState,
+      })
+
+      transaction.update(roomRef, {
+        currentTurnPlayerId: nextTurnPlayerId,
+      })
+    }
+
+    transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
+      message: `${playerName} left the game.`,
       createdAt: serverTimestamp(),
     })
 
-    await batch.commit()
-
     return {
-      gameFinished: remainingPlayers.length === 0,
+      gameFinished: false,
       winnerId: null,
     }
-  }
-
-  if (room.status !== 'playing') {
-    return {
-      gameFinished: room.status === 'finished',
-      winnerId: room.winnerId,
-    }
-  }
-
-  const states = await getPlayerStates(roomCode)
-  const currentState = states.find((state) => state.playerId === params.playerId)
-
-  if (!currentState) {
-    throw new Error('Player state not found.')
-  }
-
-  const nextPlayerState: PlayerGameState = {
-    ...currentState,
-    hand: [],
-    hideYesPile: true,
-    hideNoPile: true,
-    eliminated: true,
-  }
-
-  const stateByPlayerId = new Map(states.map((state) => [state.playerId, state]))
-  stateByPlayerId.set(params.playerId, nextPlayerState)
-
-  const activePlayersAfterLeave = players.filter((player) => {
-    const state = stateByPlayerId.get(player.id)
-    return !state?.eliminated
   })
-
-  batch.set(
-    doc(db, 'rooms', roomCode, 'playerStates', params.playerId),
-    nextPlayerState,
-  )
-
-  batch.update(doc(db, 'rooms', roomCode, 'players', params.playerId), {
-    eliminated: true,
-  })
-
-  if (room.hostId === params.playerId && remainingPlayers.length > 0) {
-    const nextHost = remainingPlayers[0]
-
-    batch.update(roomRef, {
-      hostId: nextHost.id,
-    })
-
-    batch.update(doc(db, 'rooms', roomCode, 'players', nextHost.id), {
-      isHost: true,
-    })
-  }
-
-  if (activePlayersAfterLeave.length === 1) {
-    const winner = activePlayersAfterLeave[0]
-    const winnerName = winner?.name ?? 'The remaining player'
-
-    batch.update(roomRef, {
-      status: 'finished',
-      winnerId: winner?.id ?? null,
-      currentTurnPlayerId: null,
-    })
-
-    batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-      message: `${playerName} left the game. ${winnerName} wins as the last remaining player.`,
-      createdAt: serverTimestamp(),
-    })
-
-    await batch.commit()
-
-    return {
-      gameFinished: true,
-      winnerId: winner?.id ?? null,
-    }
-  }
-
-  if (activePlayersAfterLeave.length === 0) {
-    batch.update(roomRef, {
-      status: 'finished',
-      winnerId: null,
-      currentTurnPlayerId: null,
-    })
-
-    batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-      message: `${playerName} left the game. No active players remain.`,
-      createdAt: serverTimestamp(),
-    })
-
-    await batch.commit()
-
-    return {
-      gameFinished: true,
-      winnerId: null,
-    }
-  }
-
-  if (room.currentTurnPlayerId === params.playerId) {
-    const nextTurnPlayerId = getNextActiveTurnPlayerId({
-      players,
-      states,
-      currentPlayerId: params.playerId,
-      currentPlayerNextState: nextPlayerState,
-    })
-
-    batch.update(roomRef, {
-      currentTurnPlayerId: nextTurnPlayerId,
-    })
-  }
-
-  batch.set(doc(collection(db, 'rooms', roomCode, 'log')), {
-    message: `${playerName} left the game.`,
-    createdAt: serverTimestamp(),
-  })
-
-  await batch.commit()
-
-  return {
-    gameFinished: false,
-    winnerId: null,
-  }
 }
 
 export function listenToRoom(

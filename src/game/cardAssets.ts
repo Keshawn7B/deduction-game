@@ -8,6 +8,7 @@ export type LayerAsset = {
 
 const assetPath = (path: string) => `${import.meta.env.BASE_URL}${path}`
 
+
 export const backgroundAssets: Record<Location, string> = {
   Beach: assetPath('assets/cards/backgrounds/bkg1.png'),
   Moon: assetPath('assets/cards/backgrounds/bkg2.png'),
@@ -44,7 +45,7 @@ export const animalAssets: Record<Animal, LayerAsset> = {
   Cat: {
     src: assetPath('assets/cards/animals/aml3.png'),
     alt: 'Cat portrait',
-    className: 'left-[9.5%] top-[24%] h-[61%] w-[78%]',
+    className: 'left-[11%] top-[24%] h-[61%] w-[78%]',
   },
   Bear: {
     src: assetPath('assets/cards/animals/aml4.png'),
@@ -77,7 +78,7 @@ export const accessoryAssets: Record<Disguise, LayerAsset> = {
   Pirate: {
     src: assetPath('assets/cards/accessories/acc1.png'),
     alt: 'Pirate accessory',
-    className: 'left-[2%] top-[18%] h-[40%] w-[96%]',
+    className: 'left-[2%] top-[2%] h-[40%] w-[96%]',
   },
   Wizard: {
     src: assetPath('assets/cards/accessories/acc2.png'),
@@ -102,7 +103,7 @@ export const accessoryAssets: Record<Disguise, LayerAsset> = {
   Flowers: {
     src: assetPath('assets/cards/accessories/acc6.png'),
     alt: 'Flowers accessory',
-    className: 'left-[2%] top-[12%] h-[42%] w-[96%]',
+    className: 'left-[3%] top-[10%] h-[28%] w-[94%]',
   },
   Shades: {
     src: assetPath('assets/cards/accessories/acc7.png'),
@@ -116,24 +117,113 @@ export const accessoryAssets: Record<Disguise, LayerAsset> = {
   },
 }
 
+/*
+Edit all 64 accessory positions here.
+
+Format:
+left = horizontal position
+top = vertical position
+h = height
+w = width
+
+Examples:
+- Move right: left-[1%] -> left-[4%]
+- Move left: left-[1%] -> left-[-2%]
+- Move down: top-[20%] -> top-[24%]
+- Move up: top-[20%] -> top-[16%]
+- Bigger: h-[24%] w-[104%] -> h-[28%] w-[112%]
+
+Only edit the strings below. Do not edit src paths here.
+*/
 export const accessoryPositionOverrides: Partial<
   Record<Animal, Partial<Record<Disguise, string>>>
 > = {
+  Fox: {
+    Pirate: 'left-[2%] top-[22%] h-[40%] w-[96%]',
+    Wizard: 'left-[6%] top-[10%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[25%] h-[34%] w-[84%]',
+    Crown: 'left-[10%] top-[23%] h-[30%] w-[80%]',
+    Goggles: 'left-[0%] top-[34%] h-[24%] w-[100%]',
+    Flowers: 'left-[3%] top-[23%] h-[36%] w-[94%]',
+    Shades: 'left-[-2%] top-[40%] h-[24%] w-[104%]',
+    Explorer: 'left-[4%] top-[21%] h-[34%] w-[92%]',
+  },
+  Dog: {
+    Pirate: 'left-[2%] top-[12%] h-[40%] w-[96%]',
+    Wizard: 'left-[6%] top-[-2%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[16%] h-[33%] w-[84%]',
+    Crown: 'left-[10%] top-[16%] h-[26%] w-[80%]',
+    Goggles: 'left-[0%] top-[22%] h-[24%] w-[100%]',
+    Flowers: 'left-[3%] top-[14%] h-[35%] w-[94%]',
+    Shades: 'left-[-2%] top-[31%] h-[24%] w-[104%]',
+    Explorer: 'left-[4%] top-[8%] h-[34%] w-[92%]',
+  },
   Cat: {
-    Shades: 'left-[-1%] top-[38%] h-[28%] w-[112%]',
+    Pirate: 'left-[4%] top-[20%] h-[40%] w-[94%]',
+    Wizard: 'left-[6%] top-[5%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[22%] h-[34%] w-[84%]',
+    Crown: 'left-[10%] top-[20%] h-[26%] w-[80%]',
+    Goggles: 'left-[0%] top-[28%] h-[24%] w-[100%]',
+    Flowers: 'left-[3%] top-[22%] h-[32%] w-[94%]',
+    Shades: 'left-[-6%] top-[36%] h-[28%] w-[112%]',
+    Explorer: 'left-[4%] top-[18%] h-[34%] w-[92%]',
+  },
+  Bear: {
+    Pirate: 'left-[2%] top-[13%] h-[40%] w-[96%]',
+    Wizard: 'left-[6%] top-[-2%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[13%] h-[34%] w-[84%]',
+    Crown: 'left-[10%] top-[13%] h-[26%] w-[80%]',
+    Goggles: 'left-[0%] top-[41%] h-[24%] w-[100%]',
+    Flowers: 'left-[3%] top-[10%] h-[40%] w-[94%]',
+    Shades: 'left-[-2%] top-[32%] h-[29%] w-[104%]',
+    Explorer: 'left-[4%] top-[8%] h-[34%] w-[92%]',
   },
   Rabbit: {
-    Pirate: 'left-[0%] top-[0%] h-[42%] w-[100%]',
-    Wizard: 'left-[4%] top-[-4%] h-[46%] w-[92%]',
-    Detective: 'left-[5%] top-[5%] h-[36%] w-[90%]',
-    Crown: 'left-[8%] top-[5%] h-[30%] w-[84%]',
-    Explorer: 'left-[2%] top-[5%] h-[36%] w-[96%]',
+    Pirate: 'left-[0%] top-[25%] h-[42%] w-[100%]',
+    Wizard: 'left-[4%] top-[5%] h-[46%] w-[92%]',
+    Detective: 'left-[5%] top-[29%] h-[25%] w-[90%]',
+    Crown: 'left-[8%] top-[25%] h-[30%] w-[84%]',
+    Goggles: 'left-[0%] top-[34%] h-[24%] w-[100%]',
+    Flowers: 'left-[3%] top-[28%] h-[28%] w-[94%]',
+    Shades: 'left-[-2%] top-[40%] h-[24%] w-[104%]',
+    Explorer: 'left-[2%] top-[29%] h-[25%] w-[96%]',
+  },
+  Penguin: {
+    Pirate: 'left-[2%] top-[8%] h-[50%] w-[96%]',
+    Wizard: 'left-[6%] top-[0%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[18%] h-[34%] w-[84%]',
+    Crown: 'left-[10%] top-[10%] h-[40%] w-[80%]',
+    Goggles: 'left-[0%] top-[27%] h-[32%] w-[100%]',
+    Flowers: 'left-[3%] top-[15%] h-[35%] w-[94%]',
+    Shades: 'left-[-2%] top-[29%] h-[29%] w-[104%]',
+    Explorer: 'left-[4%] top-[13%] h-[34%] w-[92%]',
+  },
+  Lizard: {
+    Pirate: 'left-[2%] top-[15%] h-[45%] w-[96%]',
+    Wizard: 'left-[6%] top-[4%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[20%] h-[34%] w-[84%]',
+    Crown: 'left-[10%] top-[20%] h-[26%] w-[80%]',
+    Goggles: 'left-[0%] top-[34%] h-[24%] w-[100%]',
+    Flowers: 'left-[0%] top-[16%] h-[40%] w-[100%]',
+    Shades: 'left-[-2%] top-[27%] h-[33%] w-[104%]',
+    Explorer: 'left-[4%] top-[15%] h-[34%] w-[92%]',
+  },
+  Owl: {
+    Pirate: 'left-[2%] top-[0%] h-[68%] w-[96%]',
+    Wizard: 'left-[6%] top-[0%] h-[44%] w-[88%]',
+    Detective: 'left-[8%] top-[17%] h-[34%] w-[84%]',
+    Crown: 'left-[10%] top-[16%] h-[26%] w-[80%]',
+    Goggles: 'left-[0%] top-[34%] h-[24%] w-[100%]',
+    Flowers: 'left-[7%] top-[17%] h-[33%] w-[88%]',
+    Shades: 'left-[-2%] top-[28%] h-[35%] w-[104%]',
+    Explorer: 'left-[4%] top-[13%] h-[34%] w-[92%]',
   },
 }
 
 const legacyAccessoryMap: Record<string, Disguise> = {
   Astronaut: 'Flowers',
   Aviator: 'Flowers',
+  Wig: 'Flowers',
   Robot: 'Shades',
   Ninja: 'Explorer',
   Chef: 'Goggles',
@@ -148,10 +238,7 @@ export function normalizeAccessory(value: string): Disguise {
   return legacyAccessoryMap[value] ?? 'Pirate'
 }
 
-export function getAccessoryAsset(
-  value: string,
-  animal?: Animal,
-): LayerAsset {
+export function getAccessoryAsset(value: string, animal?: Animal): LayerAsset {
   const accessoryName = normalizeAccessory(value)
   const asset = accessoryAssets[accessoryName]
   const overrideClassName = animal

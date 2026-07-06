@@ -1,3 +1,4 @@
+import type { SyntheticEvent } from 'react'
 import type { Card } from '../../types/card'
 import {
   animalAssets,
@@ -11,16 +12,16 @@ type LayeredCardArtProps = {
   card: Card
 }
 
-function hideBrokenImage(event: React.SyntheticEvent<HTMLImageElement>) {
+function hideBrokenImage(event: SyntheticEvent<HTMLImageElement>) {
   event.currentTarget.style.display = 'none'
 }
 
 export function LayeredCardArt({ card }: LayeredCardArtProps) {
-  const animal = animalAssets[card.animal]
+  const animal = animalAssets[card.animal] ?? animalAssets.Fox
   const accessory = getAccessoryAsset(card.disguise, card.animal)
   const accessoryName = normalizeAccessory(card.disguise)
-  const background = backgroundAssets[card.location]
-  const fallback = backgroundFallbacks[card.location]
+  const background = backgroundAssets[card.location] ?? backgroundAssets.Beach
+  const fallback = backgroundFallbacks[card.location] ?? backgroundFallbacks.Beach
 
   return (
     <div

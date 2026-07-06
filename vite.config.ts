@@ -3,6 +3,6 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  base: '/deduction-game/',
+  base: './',
   plugins: [react(), tailwindcss()],
 })

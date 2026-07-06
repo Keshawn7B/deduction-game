@@ -17,7 +17,6 @@ export type Accessory =
   | 'Flowers'
   | 'Shades'
   | 'Explorer'
-
 export type Disguise = Accessory
 
 export type Location =
@@ -44,3 +43,5 @@ export type Guess = {
 }
 
 export type ClueResult = 'YES' | 'NO'
+
+export type CardSetSize = 4 | 6 | 8
