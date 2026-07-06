@@ -10,7 +10,7 @@ import {
   listenToRoom,
   makeGuess,
 } from '../firebase/rooms'
-import { ANIMALS, DISGUISES, LOCATIONS } from '../game/deck'
+import { getCardSetOptions, isCardSetSize } from '../game/deck'
 import type { Animal, Disguise, Location } from '../types/card'
 import type { PlayerGameState, PlayerIdentityDoc } from '../types/game'
 import type { LobbyPlayer, RoomDoc } from '../types/room'
@@ -25,9 +25,9 @@ export function GuessPage() {
   const [playerState, setPlayerState] = useState<PlayerGameState | null>(null)
   const [identities, setIdentities] = useState<PlayerIdentityDoc[]>([])
 
-  const [animal, setAnimal] = useState<Animal>(ANIMALS[0])
-  const [disguise, setDisguise] = useState<Disguise>(DISGUISES[0])
-  const [location, setLocation] = useState<Location>(LOCATIONS[0])
+  const [animal, setAnimal] = useState<Animal>('Fox')
+  const [disguise, setDisguise] = useState<Disguise>('Pirate')
+  const [location, setLocation] = useState<Location>('Beach')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -64,6 +64,19 @@ export function GuessPage() {
 
   const isYourTurn = room?.currentTurnPlayerId === user?.uid
   const isEliminated = playerState?.eliminated ?? false
+  const cardSetSize = isCardSetSize(room?.cardSetSize ?? 8)
+    ? (room?.cardSetSize ?? 8)
+    : 8
+  const guessOptions = useMemo(() => getCardSetOptions(cardSetSize), [cardSetSize])
+  const selectedAnimal = guessOptions.animals.includes(animal)
+    ? animal
+    : guessOptions.animals[0]
+  const selectedDisguise = guessOptions.disguises.includes(disguise)
+    ? disguise
+    : guessOptions.disguises[0]
+  const selectedLocation = guessOptions.locations.includes(location)
+    ? location
+    : guessOptions.locations[0]
 
   const currentTurnName = useMemo(() => {
     const currentPlayer = players.find(
@@ -97,9 +110,9 @@ export function GuessPage() {
         roomCode,
         playerId: user.uid,
         guess: {
-          animal,
-          disguise,
-          location,
+          animal: selectedAnimal,
+          disguise: selectedDisguise,
+          location: selectedLocation,
         },
       })
 
@@ -160,11 +173,11 @@ export function GuessPage() {
                   Animal
                 </span>
                 <select
-                  value={animal}
+                  value={selectedAnimal}
                   onChange={(event) => setAnimal(event.target.value as Animal)}
                   className="mt-2 w-full rounded-xl bg-slate-950 p-3"
                 >
-                  {ANIMALS.map((value) => (
+                  {guessOptions.animals.map((value) => (
                     <option key={value}>{value}</option>
                   ))}
                 </select>
@@ -175,13 +188,13 @@ export function GuessPage() {
                   Accessory
                 </span>
                 <select
-                  value={disguise}
+                  value={selectedDisguise}
                   onChange={(event) =>
                     setDisguise(event.target.value as Disguise)
                   }
                   className="mt-2 w-full rounded-xl bg-slate-950 p-3"
                 >
-                  {DISGUISES.map((value) => (
+                  {guessOptions.disguises.map((value) => (
                     <option key={value}>{value}</option>
                   ))}
                 </select>
@@ -192,13 +205,13 @@ export function GuessPage() {
                   Location
                 </span>
                 <select
-                  value={location}
+                  value={selectedLocation}
                   onChange={(event) =>
                     setLocation(event.target.value as Location)
                   }
                   className="mt-2 w-full rounded-xl bg-slate-950 p-3"
                 >
-                  {LOCATIONS.map((value) => (
+                  {guessOptions.locations.map((value) => (
                     <option key={value}>{value}</option>
                   ))}
                 </select>

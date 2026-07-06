@@ -39,11 +39,17 @@ export function isCardSetSize(value: number): value is CardSetSize {
   return CARD_SET_SIZES.includes(value as CardSetSize)
 }
 
+export function getCardSetOptions(cardSetSize: CardSetSize = 8) {
+  return {
+    animals: ANIMALS.slice(0, cardSetSize),
+    disguises: DISGUISES.slice(0, cardSetSize),
+    locations: LOCATIONS.slice(0, cardSetSize),
+  }
+}
+
 export function createDeck(cardSetSize: CardSetSize = 8): Card[] {
   const cards: Card[] = []
-  const animals = ANIMALS.slice(0, cardSetSize)
-  const disguises = DISGUISES.slice(0, cardSetSize)
-  const locations = LOCATIONS.slice(0, cardSetSize)
+  const { animals, disguises, locations } = getCardSetOptions(cardSetSize)
 
   for (const animal of animals) {
     for (const disguise of disguises) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDeck } from './deck'
+import { createDeck, getCardSetOptions } from './deck'
 import { isCorrectGuess } from './guess'
 import { getClueResult, validatePlayerCount } from './rules'
 import { createInitialGameState } from './setup'
@@ -21,6 +21,26 @@ describe('game rules', () => {
       expect(deck).toHaveLength(cardSetSize ** 3)
       expect(ids.size).toBe(cardSetSize ** 3)
     }
+  })
+
+  it('returns matching guess choices for each lobby card set size', () => {
+    expect(getCardSetOptions(4)).toEqual({
+      animals: ['Fox', 'Dog', 'Cat', 'Bear'],
+      disguises: ['Pirate', 'Wizard', 'Detective', 'Crown'],
+      locations: ['Beach', 'Moon', 'Castle', 'Forest'],
+    })
+
+    expect(getCardSetOptions(6)).toEqual({
+      animals: ['Fox', 'Dog', 'Cat', 'Bear', 'Rabbit', 'Penguin'],
+      disguises: ['Pirate', 'Wizard', 'Detective', 'Crown', 'Goggles', 'Flowers'],
+      locations: ['Beach', 'Moon', 'Castle', 'Forest', 'Museum', 'Kitchen'],
+    })
+
+    expect(getCardSetOptions(8)).toEqual({
+      animals: ['Fox', 'Dog', 'Cat', 'Bear', 'Rabbit', 'Penguin', 'Lizard', 'Owl'],
+      disguises: ['Pirate', 'Wizard', 'Detective', 'Crown', 'Goggles', 'Flowers', 'Shades', 'Explorer'],
+      locations: ['Beach', 'Moon', 'Castle', 'Forest', 'Museum', 'Kitchen', 'Volcano', 'Library'],
+    })
   })
 
   it('validates player count', () => {
