@@ -767,28 +767,30 @@ export function GamePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/20 p-4">
-                  <h3 className="font-black text-emerald-200">YES cards</h3>
-                  {selectedPlayerIsYou && !playerState?.hideYesPile ? (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                      {playerState?.yesPile.map((card) => <CardView key={card.id} card={card} label="YES" />)}
-                      {playerState?.yesPile.length === 0 ? <p className="text-sm text-slate-400">No YES cards yet.</p> : null}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-400">This pile is not visible from your current player view.</p>
-                  )}
-                </div>
+                <div className="grid gap-4 lg:col-span-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/20 p-4">
+                    <h3 className="font-black text-emerald-200">YES cards</h3>
+                    {selectedPlayerIsYou && !playerState?.hideYesPile ? (
+                      <div className="mt-3 grid gap-3">
+                        {playerState?.yesPile.map((card) => <CardView key={card.id} card={card} label="YES" />)}
+                        {playerState?.yesPile.length === 0 ? <p className="text-sm text-slate-400">No YES cards yet.</p> : null}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-400">This pile is not visible from your current player view.</p>
+                    )}
+                  </div>
 
-                <div className="rounded-2xl border border-rose-400/30 bg-rose-950/20 p-4">
-                  <h3 className="font-black text-rose-200">NO cards</h3>
-                  {selectedPlayerIsYou && !playerState?.hideNoPile ? (
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                      {playerState?.noPile.map((card) => <CardView key={card.id} card={card} label="NO" />)}
-                      {playerState?.noPile.length === 0 ? <p className="text-sm text-slate-400">No NO cards yet.</p> : null}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-400">This pile is not visible from your current player view.</p>
-                  )}
+                  <div className="rounded-2xl border border-rose-400/30 bg-rose-950/20 p-4">
+                    <h3 className="font-black text-rose-200">NO cards</h3>
+                    {selectedPlayerIsYou && !playerState?.hideNoPile ? (
+                      <div className="mt-3 grid gap-3">
+                        {playerState?.noPile.map((card) => <CardView key={card.id} card={card} label="NO" />)}
+                        {playerState?.noPile.length === 0 ? <p className="text-sm text-slate-400">No NO cards yet.</p> : null}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-slate-400">This pile is not visible from your current player view.</p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-cyan-400/30 bg-cyan-950/20 p-4">
