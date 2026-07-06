@@ -15,7 +15,9 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { applyWrongGuessPenalty, isCorrectGuess } from '../game/guess'
+import { appendPublicGuess, createPublicGuess } from '../game/publicGuess'
 import { isCardSetSize } from '../game/deck'
+import { appendPublicReveal, createPublicReveal } from '../game/publicReveal'
 import { getClueResult } from '../game/rules'
 import { createInitialGameState } from '../game/setup'
 import type { StartingCluesMode } from '../game/setup'
@@ -206,6 +208,10 @@ export async function createRoom(params: {
       hostId: params.hostId,
       status: 'lobby',
       pendingReveal: null,
+      lastReveal: null,
+      publicReveals: [],
+      publicGuesses: [],
+      turnNumber: 0,
       manualResponses: false,
       cardSetSize: 8,
       startingCluesMode: 'automatic',
@@ -472,6 +478,10 @@ export async function startGame(params: {
 
     transaction.update(roomRef, {
       status: startingCluesMode === 'playerChoice' ? 'setupClues' : 'playing',
+      lastReveal: null,
+      publicReveals: [],
+      publicGuesses: [],
+      turnNumber: startingCluesMode === 'playerChoice' ? 0 : 1,
       currentTurnPlayerId:
         startingCluesMode === 'playerChoice'
           ? null
@@ -839,11 +849,19 @@ async function revealCardAutomatic(params: {
     })
     const playerName =
       players.find((player) => player.id === params.playerId)?.name ?? 'A player'
+    const publicReveal = createPublicReveal({
+      playerId: params.playerId,
+      playerName,
+      card: revealedCard,
+      result: revealResult,
+    })
 
     transaction.set(playerStateRef, nextPlayerState)
     transaction.set(deckRef, nextDeckState)
     transaction.update(roomRef, {
       currentTurnPlayerId: nextTurnPlayerId,
+      lastReveal: publicReveal,
+      publicReveals: appendPublicReveal(room.publicReveals, publicReveal),
     })
     transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
       message: `${playerName} revealed a card. Result: ${revealResult}.`,
@@ -945,12 +963,20 @@ export async function submitRevealResponse(params: {
       'A player'
     const revealerName =
       players.find((player) => player.id === revealerId)?.name ?? 'a player'
+    const publicReveal = createPublicReveal({
+      playerId: revealerId,
+      playerName: revealerName,
+      card: revealedCard,
+      result: params.result,
+    })
 
     transaction.set(revealerStateRef, nextRevealerState)
     transaction.set(deckRef, nextDeckState)
     transaction.update(roomRef, {
       pendingReveal: null,
       currentTurnPlayerId: nextTurnPlayerId,
+      lastReveal: publicReveal,
+      publicReveals: appendPublicReveal(room.publicReveals, publicReveal),
     })
 
     transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
@@ -972,6 +998,7 @@ export async function makeGuess(params: {
   const roomCode = normalizeRoomCode(params.roomCode)
   const roomRef = doc(db, 'rooms', roomCode)
   const playerStateRef = doc(db, 'rooms', roomCode, 'playerStates', params.playerId)
+  const playerRef = doc(db, 'rooms', roomCode, 'players', params.playerId)
   const identityRef = doc(db, 'rooms', roomCode, 'identities', params.playerId)
 
   const players = await getLobbyPlayers(roomCode)
@@ -1016,12 +1043,22 @@ export async function makeGuess(params: {
       players.find((player) => player.id === params.playerId)?.name ?? 'A player'
 
     const correct = isCorrectGuess(identity.hiddenIdentity, params.guess)
+    const nextTurnNumber = (room.turnNumber ?? 0) + 1
+    const publicGuess = createPublicGuess({
+      playerId: params.playerId,
+      playerName,
+      guess: params.guess,
+      correct,
+      turnNumber: nextTurnNumber,
+    })
 
     if (correct) {
       transaction.update(roomRef, {
         status: 'finished',
         winnerId: params.playerId,
         currentTurnPlayerId: null,
+        publicGuesses: appendPublicGuess(room.publicGuesses, publicGuess),
+        turnNumber: nextTurnNumber,
       })
 
       transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
@@ -1057,6 +1094,10 @@ export async function makeGuess(params: {
     })
 
     transaction.set(playerStateRef, nextPlayerState)
+    transaction.update(playerRef, {
+      wrongGuesses: penalty.wrongGuesses,
+      eliminated: penalty.eliminated,
+    })
 
     if (activePlayersAfterGuess.length === 1) {
       const winner = activePlayersAfterGuess[0]
@@ -1066,6 +1107,8 @@ export async function makeGuess(params: {
         status: 'finished',
         winnerId: winner?.id ?? null,
         currentTurnPlayerId: null,
+        publicGuesses: appendPublicGuess(room.publicGuesses, publicGuess),
+        turnNumber: nextTurnNumber,
       })
 
       transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
@@ -1087,6 +1130,8 @@ export async function makeGuess(params: {
         status: 'finished',
         winnerId: null,
         currentTurnPlayerId: null,
+        publicGuesses: appendPublicGuess(room.publicGuesses, publicGuess),
+        turnNumber: nextTurnNumber,
       })
 
       transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {
@@ -1112,6 +1157,8 @@ export async function makeGuess(params: {
 
     transaction.update(roomRef, {
       currentTurnPlayerId: nextTurnPlayerId,
+      publicGuesses: appendPublicGuess(room.publicGuesses, publicGuess),
+      turnNumber: nextTurnNumber,
     })
 
     transaction.set(doc(collection(db, 'rooms', roomCode, 'log')), {

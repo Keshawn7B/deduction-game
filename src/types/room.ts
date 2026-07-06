@@ -1,3 +1,5 @@
+import type { PublicGuess } from '../game/publicGuess'
+import type { PublicReveal } from '../game/publicReveal'
 import type { StartingCluesMode } from '../game/setup'
 import type { Card, CardSetSize } from './card'
 export type PendingReveal = {
@@ -17,6 +19,10 @@ export type RoomDoc = {
   cardSetSize?: CardSetSize
   startingCluesMode?: StartingCluesMode
   pendingReveal?: PendingReveal | null
+  lastReveal?: PublicReveal | null
+  publicReveals?: PublicReveal[]
+  publicGuesses?: PublicGuess[]
+  turnNumber?: number
   winnerId: string | null
   playerCount?: number
   createdAt: unknown
