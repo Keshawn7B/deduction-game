@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CardView } from '../components/game/CardView'
 import { Button } from '../components/ui/Button'
@@ -13,6 +13,12 @@ import {
   revealCard,
   submitInitialClues,
 } from '../firebase/rooms'
+import {
+  playGentleTurnChime,
+  readTurnSoundPreference,
+  saveTurnSoundPreference,
+  shouldPlayTurnChime,
+} from '../game/turnSound'
 import type { PlayerGameState, PlayerIdentityDoc } from '../types/game'
 import type { GameLogEntry } from '../types/log'
 import type { LobbyPlayer, RoomDoc } from '../types/room'
@@ -40,6 +46,11 @@ export function GamePage() {
   const [setupNoCardId, setSetupNoCardId] = useState('')
   const [busy, setBusy] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [turnSoundEnabled, setTurnSoundEnabled] = useState(() =>
+    readTurnSoundPreference(),
+  )
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const previousIsYourTurnRef = useRef(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -79,6 +90,22 @@ export function GamePage() {
   const isPlaying = room?.status === 'playing'
   const isYourTurn = isPlaying && room?.currentTurnPlayerId === user?.uid
   const isEliminated = playerState?.eliminated ?? false
+
+  useEffect(() => {
+    if (
+      turnSoundEnabled &&
+      shouldPlayTurnChime({
+        wasYourTurn: previousIsYourTurnRef.current,
+        isYourTurn,
+        isPlaying,
+        isEliminated,
+      })
+    ) {
+      playGentleTurnChime()
+    }
+
+    previousIsYourTurnRef.current = isYourTurn
+  }, [isEliminated, isPlaying, isYourTurn, turnSoundEnabled])
 
   const currentTurnName = useMemo(() => {
     if (isSetupPhase) {
@@ -244,6 +271,17 @@ export function GamePage() {
     }
   }
 
+  function handleToggleTurnSound() {
+    const nextEnabled = !turnSoundEnabled
+
+    setTurnSoundEnabled(nextEnabled)
+    saveTurnSoundPreference(nextEnabled)
+
+    if (nextEnabled) {
+      playGentleTurnChime()
+    }
+  }
+
   return (
     <section className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-4 py-4 lg:h-screen lg:overflow-hidden">
       <header className="flex shrink-0 flex-col gap-3 rounded-[2rem] border border-slate-800 bg-slate-950/90 p-4 shadow-2xl shadow-slate-950/40 sm:flex-row sm:items-center sm:justify-between">
@@ -257,13 +295,54 @@ export function GamePage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-start justify-end gap-2">
           <Link to={`/game/${roomCode}/guess`}>
             <Button disabled={isEliminated || !isPlaying}>Make Guess</Button>
           </Link>
           <Button variant="danger" onClick={handleLeaveGame} disabled={leaving}>
             {leaving ? 'Leaving...' : 'Leave Game'}
           </Button>
+          <div className="relative">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setSettingsOpen((open) => !open)}
+              aria-expanded={settingsOpen}
+              aria-controls="game-settings-panel"
+            >
+              ⚙ Settings
+            </Button>
+
+            {settingsOpen ? (
+              <div
+                id="game-settings-panel"
+                className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-700 bg-slate-950 p-4 text-left shadow-2xl shadow-slate-950/60"
+              >
+                <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
+                  Settings
+                </p>
+                <button
+                  type="button"
+                  onClick={handleToggleTurnSound}
+                  className={`mt-3 w-full rounded-2xl border p-4 text-left transition ${
+                    turnSoundEnabled
+                      ? 'border-cyan-300/70 bg-cyan-950/30 hover:border-cyan-200'
+                      : 'border-slate-700 bg-slate-900/90 hover:border-cyan-300'
+                  }`}
+                >
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                    Turn sound
+                  </p>
+                  <p className="mt-2 text-lg font-black text-cyan-200">
+                    {turnSoundEnabled ? 'On · gentle chime' : 'Off · tap to enable'}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Plays a soft alert when it becomes your turn.
+                  </p>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </div>
       </header>
 
