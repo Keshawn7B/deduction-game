@@ -32,7 +32,7 @@ export function GamePage() {
   const [identities, setIdentities] = useState<PlayerIdentityDoc[]>([])
   const [gameLog, setGameLog] = useState<GameLogEntry[]>([])
   const [openPanel, setOpenPanel] = useState<
-    'hand' | 'yesPile' | 'noPile' | 'identities' | null
+    'table' | 'hand' | 'yesPile' | 'noPile' | 'identities' | null
   >(null)
   const [selectedCardId, setSelectedCardId] = useState('')
   const [setupYesCardId, setSetupYesCardId] = useState('')
@@ -120,15 +120,17 @@ export function GamePage() {
   }, [players])
 
   const openPanelTitle =
-    openPanel === 'hand'
-      ? 'Your cards'
-      : openPanel === 'yesPile'
-        ? 'Your YES pile'
-        : openPanel === 'noPile'
-          ? 'Your NO pile'
-          : openPanel === 'identities'
-            ? 'Other identities'
-            : ''
+    openPanel === 'table'
+      ? 'Table view'
+      : openPanel === 'hand'
+        ? 'Your cards'
+        : openPanel === 'yesPile'
+          ? 'Your YES pile'
+          : openPanel === 'noPile'
+            ? 'Your NO pile'
+            : openPanel === 'identities'
+              ? 'Other identities'
+              : ''
 
   const openPanelCards =
     openPanel === 'hand'
@@ -252,144 +254,34 @@ export function GamePage() {
 
       {isPlaying || room?.lastReveal || room?.pendingReveal || room?.publicGuesses?.length ? (
         <div className="mt-5 rounded-[2rem] border border-cyan-300/30 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/30 p-5 shadow-2xl shadow-cyan-950/20">
-          <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-center">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
               <p className="text-xs font-black uppercase tracking-[0.28em] text-slate-400">
-                Current turn
+                Table view
               </p>
-              <p className="mt-2 text-3xl font-black text-cyan-200">
+              <h2 className="mt-2 text-2xl font-black text-cyan-200">
                 {currentTurnName}
-              </p>
+              </h2>
               <p className="mt-1 text-sm text-slate-400">
-                Everyone sees this same table state.
-              </p>
-              <p className="mt-3 inline-flex rounded-full bg-slate-800 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-300">
-                Table turn {room?.turnNumber ?? 0}
+                Table turn {room?.turnNumber ?? 0} ·{' '}
+                {room?.pendingReveal
+                  ? 'Waiting on a reveal answer'
+                  : room?.lastReveal
+                    ? `Latest reveal: ${room.lastReveal.result}`
+                    : room?.publicGuesses?.length
+                      ? 'Latest guess is recorded'
+                      : 'No table moves yet'}
               </p>
             </div>
 
-            <div className="text-center text-sm font-black uppercase tracking-[0.25em] text-slate-500">
-              table
-            </div>
-
-            <div className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4">
-              {room?.pendingReveal ? (
-                <div>
-                  <p className="text-sm font-black text-amber-200">
-                    {playerNameById.get(room.pendingReveal.playerId) ?? 'A player'} revealed this card
-                  </p>
-                  <div className="mt-3 max-w-[220px]">
-                    <CardView card={room.pendingReveal.card} label="Waiting" />
-                  </div>
-                  <p className="mt-3 text-sm text-amber-100">
-                    Waiting for {playerNameById.get(room.pendingReveal.responderId) ?? 'another player'} to answer.
-                  </p>
-                </div>
-              ) : room?.lastReveal ? (
-                <div>
-                  <p className="text-sm font-black text-slate-200">
-                    {room.lastReveal.playerName} revealed this card
-                  </p>
-                  <div className="mt-3 max-w-[220px]">
-                    <CardView
-                      card={room.lastReveal.card}
-                      label={room.lastReveal.result}
-                    />
-                  </div>
-                  <p
-                    className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-black ${
-                      room.lastReveal.result === 'YES'
-                        ? 'bg-emerald-300 text-slate-950'
-                        : 'bg-rose-300 text-slate-950'
-                    }`}
-                  >
-                    Result: {room.lastReveal.result}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-400">
-                  No card has been revealed yet.
-                </p>
-              )}
-            </div>
+            <Button
+              variant="secondary"
+              onClick={() => setOpenPanel('table')}
+              className="w-full sm:w-auto"
+            >
+              View Table
+            </Button>
           </div>
-
-          {room?.publicReveals?.length ? (
-            <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-black text-slate-100">Recent table moves</h2>
-                  <p className="text-sm text-slate-400">
-                    Public reveal trail. Newest move is first.
-                  </p>
-                </div>
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-slate-300">
-                  {room.publicReveals.length} shown
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {room.publicReveals.map((reveal, index) => (
-                  <div
-                    key={`${reveal.playerId}-${reveal.card.id}-${index}`}
-                    className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3"
-                  >
-                    <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                      {index === 0 ? 'Latest' : `Move ${index + 1}`}
-                    </p>
-                    <CardView card={reveal.card} label={reveal.result} />
-                    <p className="mt-2 text-sm font-semibold text-slate-300">
-                      {reveal.playerName}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {room?.publicGuesses?.length ? (
-            <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-black text-slate-100">Recent guesses</h2>
-                  <p className="text-sm text-slate-400">
-                    Public guess trail. Newest guess is first.
-                  </p>
-                </div>
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-slate-300">
-                  {room.publicGuesses.length} shown
-                </span>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {room.publicGuesses.map((guess, index) => (
-                  <div
-                    key={`${guess.playerId}-${guess.turnNumber}-${index}`}
-                    className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
-                        Turn {guess.turnNumber}
-                        {index === 0 ? ' · Latest guess' : ''}
-                      </p>
-                      <p className="mt-1 font-semibold text-slate-200">
-                        {guess.playerName} guessed {describeCard(guess.guess)}
-                      </p>
-                    </div>
-                    <span
-                      className={`self-start rounded-full px-3 py-1 text-xs font-black sm:self-auto ${
-                        guess.correct
-                          ? 'bg-emerald-300 text-slate-950'
-                          : 'bg-rose-300 text-slate-950'
-                      }`}
-                    >
-                      {guess.correct ? 'Correct' : 'Wrong'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
 
@@ -703,7 +595,148 @@ export function GamePage() {
               </Button>
             </div>
 
-            {openPanel === 'identities' ? (
+            {openPanel === 'table' ? (
+              <div className="mt-5 rounded-[2rem] border border-cyan-300/30 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/30 p-5">
+                <div className="grid gap-5 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                  <div className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-center">
+                    <p className="text-xs font-black uppercase tracking-[0.28em] text-slate-400">
+                      Current turn
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-cyan-200">
+                      {currentTurnName}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Everyone sees this same table state.
+                    </p>
+                    <p className="mt-3 inline-flex rounded-full bg-slate-800 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-slate-300">
+                      Table turn {room?.turnNumber ?? 0}
+                    </p>
+                  </div>
+
+                  <div className="text-center text-sm font-black uppercase tracking-[0.25em] text-slate-500">
+                    table
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4">
+                    {room?.pendingReveal ? (
+                      <div>
+                        <p className="text-sm font-black text-amber-200">
+                          {playerNameById.get(room.pendingReveal.playerId) ?? 'A player'} revealed this card
+                        </p>
+                        <div className="mt-3 max-w-[220px]">
+                          <CardView card={room.pendingReveal.card} label="Waiting" />
+                        </div>
+                        <p className="mt-3 text-sm text-amber-100">
+                          Waiting for {playerNameById.get(room.pendingReveal.responderId) ?? 'another player'} to answer.
+                        </p>
+                      </div>
+                    ) : room?.lastReveal ? (
+                      <div>
+                        <p className="text-sm font-black text-slate-200">
+                          {room.lastReveal.playerName} revealed this card
+                        </p>
+                        <div className="mt-3 max-w-[220px]">
+                          <CardView
+                            card={room.lastReveal.card}
+                            label={room.lastReveal.result}
+                          />
+                        </div>
+                        <p
+                          className={`mt-3 inline-flex rounded-full px-3 py-1 text-sm font-black ${
+                            room.lastReveal.result === 'YES'
+                              ? 'bg-emerald-300 text-slate-950'
+                              : 'bg-rose-300 text-slate-950'
+                          }`}
+                        >
+                          Result: {room.lastReveal.result}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-400">
+                        No card has been revealed yet.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {room?.publicReveals?.length ? (
+                  <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="font-black text-slate-100">Recent table moves</h2>
+                        <p className="text-sm text-slate-400">
+                          Public reveal trail. Newest move is first.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-slate-300">
+                        {room.publicReveals.length} shown
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {room.publicReveals.map((reveal, index) => (
+                        <div
+                          key={`${reveal.playerId}-${reveal.card.id}-${index}`}
+                          className="rounded-2xl border border-slate-800 bg-slate-900/80 p-3"
+                        >
+                          <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                            {index === 0 ? 'Latest' : `Move ${index + 1}`}
+                          </p>
+                          <CardView card={reveal.card} label={reveal.result} />
+                          <p className="mt-2 text-sm font-semibold text-slate-300">
+                            {reveal.playerName}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {room?.publicGuesses?.length ? (
+                  <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/70 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h2 className="font-black text-slate-100">Recent guesses</h2>
+                        <p className="text-sm text-slate-400">
+                          Public guess trail. Newest guess is first.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-slate-800 px-3 py-1 text-xs font-black text-slate-300">
+                        {room.publicGuesses.length} shown
+                      </span>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {room.publicGuesses.map((guess, index) => (
+                        <div
+                          key={`${guess.playerId}-${guess.turnNumber}-${index}`}
+                          className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                              Turn {guess.turnNumber}
+                              {index === 0 ? ' · Latest guess' : ''}
+                            </p>
+                            <p className="mt-1 font-semibold text-slate-200">
+                              {guess.playerName} guessed {describeCard(guess.guess)}
+                            </p>
+                          </div>
+                          <span
+                            className={`self-start rounded-full px-3 py-1 text-xs font-black sm:self-auto ${
+                              guess.correct
+                                ? 'bg-emerald-300 text-slate-950'
+                                : 'bg-rose-300 text-slate-950'
+                            }`}
+                          >
+                            {guess.correct ? 'Correct' : 'Wrong'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : openPanel === 'identities' ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {visibleIdentities.map((identity) => (
                   <CardView
