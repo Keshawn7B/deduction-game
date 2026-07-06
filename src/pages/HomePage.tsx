@@ -2,10 +2,20 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
+import { getCardSetOptions, DEFAULT_CARD_SET_SIZE } from '../game/deck'
 import { createRoom, joinRoom } from '../firebase/rooms'
 import { normalizeRoomCode } from '../utils/roomCode'
 
-const titleBackgroundUrl = `${import.meta.env.BASE_URL}assets/title/deduction-hero-bg.png`
+const titleBackgroundWebpUrl = `${import.meta.env.BASE_URL}assets/title/deduction-hero-bg.webp`
+const titleBackgroundPngUrl = `${import.meta.env.BASE_URL}assets/title/deduction-hero-bg.png`
+const titleBackgroundImage = `image-set(url(${titleBackgroundWebpUrl}) type("image/webp"), url(${titleBackgroundPngUrl}) type("image/png"))`
+const defaultCardSetOptions = getCardSetOptions(DEFAULT_CARD_SET_SIZE)
+const titleFeatureChips = [
+  `${defaultCardSetOptions.animals.length} animals`,
+  `${defaultCardSetOptions.locations.length} backgrounds`,
+  `${defaultCardSetOptions.disguises.length} accessories`,
+]
+const titleLetters = 'Flocked'.split('')
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -77,7 +87,7 @@ export function HomePage() {
     <section className="relative min-h-screen overflow-hidden px-4 py-6 sm:px-6 lg:px-8">
       <div
         className="absolute inset-0 bg-cover bg-center opacity-95"
-        style={{ backgroundImage: `url(${titleBackgroundUrl})` }}
+        style={{ backgroundImage: titleBackgroundImage }}
         aria-hidden="true"
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(34,211,238,0.18),transparent_34%),radial-gradient(circle_at_50%_78%,rgba(251,191,36,0.13),transparent_26%),linear-gradient(180deg,rgba(2,6,23,0.78)_0%,rgba(2,6,23,0.58)_42%,rgba(2,6,23,0.94)_100%)]" />
@@ -90,8 +100,20 @@ export function HomePage() {
             Multiplayer mystery
           </div>
 
-          <h1 className="text-7xl font-black leading-none tracking-[-0.08em] text-white drop-shadow-2xl sm:text-8xl lg:text-9xl">
-            Flocked
+          <h1
+            className="flocked-title text-7xl font-black leading-none sm:text-8xl lg:text-9xl"
+            aria-label="Flocked"
+          >
+            {titleLetters.map((letter, index) => (
+              <span
+                key={`${letter}-${index}`}
+                className="flocked-title-letter"
+                style={{ animationDelay: `${index * 90}ms` }}
+                aria-hidden="true"
+              >
+                {letter}
+              </span>
+            ))}
           </h1>
 
           <p className="mx-auto mt-5 max-w-3xl text-lg leading-8 text-slate-100 drop-shadow sm:text-2xl">
@@ -183,15 +205,14 @@ export function HomePage() {
         </div>
 
         <div className="flex max-w-3xl flex-wrap justify-center gap-3 text-sm font-semibold text-slate-200">
-          <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur">
-            8 animals
-          </span>
-          <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur">
-            8 backgrounds
-          </span>
-          <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur">
-            8 accessories
-          </span>
+          {titleFeatureChips.map((chip) => (
+            <span
+              key={chip}
+              className="rounded-full border border-white/15 bg-white/10 px-4 py-2 backdrop-blur"
+            >
+              {chip}
+            </span>
+          ))}
           <span className="rounded-full border border-amber-200/25 bg-amber-200/10 px-4 py-2 text-amber-100 backdrop-blur">
             No account needed
           </span>

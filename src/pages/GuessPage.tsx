@@ -10,10 +10,20 @@ import {
   listenToRoom,
   makeGuess,
 } from '../firebase/rooms'
-import { getCardSetOptions, isCardSetSize } from '../game/deck'
+import {
+  DEFAULT_CARD_SET_SIZE,
+  getCardSetOptions,
+  normalizeCardSetSize,
+} from '../game/deck'
 import type { Animal, Disguise, Location } from '../types/card'
 import type { PlayerGameState, PlayerIdentityDoc } from '../types/game'
 import type { LobbyPlayer, RoomDoc } from '../types/room'
+
+const defaultGuessOptions = getCardSetOptions(DEFAULT_CARD_SET_SIZE)
+
+function selectValidOption<T>(options: T[], value: T): T {
+  return options.includes(value) ? value : options[0]
+}
 
 export function GuessPage() {
   const { roomCode = '' } = useParams()
@@ -25,9 +35,13 @@ export function GuessPage() {
   const [playerState, setPlayerState] = useState<PlayerGameState | null>(null)
   const [identities, setIdentities] = useState<PlayerIdentityDoc[]>([])
 
-  const [animal, setAnimal] = useState<Animal>('Fox')
-  const [disguise, setDisguise] = useState<Disguise>('Pirate')
-  const [location, setLocation] = useState<Location>('Beach')
+  const [animal, setAnimal] = useState<Animal>(defaultGuessOptions.animals[0])
+  const [disguise, setDisguise] = useState<Disguise>(
+    defaultGuessOptions.disguises[0],
+  )
+  const [location, setLocation] = useState<Location>(
+    defaultGuessOptions.locations[0],
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -64,19 +78,11 @@ export function GuessPage() {
 
   const isYourTurn = room?.currentTurnPlayerId === user?.uid
   const isEliminated = playerState?.eliminated ?? false
-  const cardSetSize = isCardSetSize(room?.cardSetSize ?? 8)
-    ? (room?.cardSetSize ?? 8)
-    : 8
+  const cardSetSize = normalizeCardSetSize(room?.cardSetSize)
   const guessOptions = useMemo(() => getCardSetOptions(cardSetSize), [cardSetSize])
-  const selectedAnimal = guessOptions.animals.includes(animal)
-    ? animal
-    : guessOptions.animals[0]
-  const selectedDisguise = guessOptions.disguises.includes(disguise)
-    ? disguise
-    : guessOptions.disguises[0]
-  const selectedLocation = guessOptions.locations.includes(location)
-    ? location
-    : guessOptions.locations[0]
+  const selectedAnimal = selectValidOption(guessOptions.animals, animal)
+  const selectedDisguise = selectValidOption(guessOptions.disguises, disguise)
+  const selectedLocation = selectValidOption(guessOptions.locations, location)
 
   const currentTurnName = useMemo(() => {
     const currentPlayer = players.find(

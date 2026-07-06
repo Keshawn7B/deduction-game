@@ -13,3 +13,89 @@ body {
   min-height: 100vh;
   background: #020617;
 }
+
+.flocked-title {
+  position: relative;
+  display: inline-flex;
+  isolation: isolate;
+  gap: 0.01em;
+  font-family:
+    Impact, Haettenschweiler, 'Arial Narrow Bold', ui-sans-serif, system-ui,
+    sans-serif;
+  letter-spacing: -0.08em;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.72);
+  filter: drop-shadow(0 0 18px rgba(34, 211, 238, 0.24))
+    drop-shadow(0 22px 34px rgba(0, 0, 0, 0.55));
+}
+
+.flocked-title::before {
+  content: 'Flocked';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  color: rgba(8, 47, 73, 0.72);
+  transform: translate(0.055em, 0.07em) skewX(-8deg);
+  -webkit-text-stroke: 0;
+  filter: blur(1px);
+}
+
+.flocked-title::after {
+  content: 'Flocked';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 0%,
+    transparent 34%,
+    rgba(255, 255, 255, 0.92) 46%,
+    rgba(125, 249, 255, 0.7) 52%,
+    transparent 64%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  color: transparent;
+  mix-blend-mode: screen;
+  animation: flocked-title-shine 4.6s ease-in-out infinite;
+}
+
+.flocked-title-letter {
+  display: inline-block;
+  background: linear-gradient(180deg, #ffffff 0%, #e0faff 36%, #67e8f9 100%);
+  background-clip: text;
+  color: transparent;
+  animation: flocked-letter-float 3.8s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes flocked-letter-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  45% {
+    transform: translateY(-0.045em) rotate(-0.8deg);
+  }
+}
+
+@keyframes flocked-title-shine {
+  0%,
+  24% {
+    background-position: 180% 50%;
+  }
+  54%,
+  100% {
+    background-position: -80% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flocked-title,
+  .flocked-title::after,
+  .flocked-title-letter {
+    animation: none;
+  }
+}

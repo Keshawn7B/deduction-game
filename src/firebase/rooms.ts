@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore'
 import { applyWrongGuessPenalty, isCorrectGuess } from '../game/guess'
 import { appendPublicGuess, createPublicGuess } from '../game/publicGuess'
-import { isCardSetSize } from '../game/deck'
+import { isCardSetSize, normalizeCardSetSize } from '../game/deck'
 import { appendPublicReveal, createPublicReveal } from '../game/publicReveal'
 import { getClueResult } from '../game/rules'
 import { createInitialGameState } from '../game/setup'
@@ -414,9 +414,7 @@ export async function startGame(params: {
       throw new Error('Every player must be ready.')
     }
 
-    const cardSetSize = isCardSetSize(room.cardSetSize ?? 8)
-      ? (room.cardSetSize ?? 8)
-      : 8
+    const cardSetSize = normalizeCardSetSize(room.cardSetSize)
     const startingCluesMode = isStartingCluesMode(room.startingCluesMode)
       ? room.startingCluesMode
       : 'automatic'

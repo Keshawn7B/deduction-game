@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { RoomShareBox } from '../components/room/RoomShareBox'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
-import { CARD_SET_SIZES } from '../game/deck'
+import { CARD_SET_SIZES, normalizeCardSetSize } from '../game/deck'
 import type { StartingCluesMode } from '../game/setup'
 import type { CardSetSize } from '../types/card'
 import {
@@ -75,7 +75,7 @@ export function LobbyPage() {
   }, [currentPlayer, navigate, room?.status])
 
   const isHost = room?.hostId === user?.uid
-  const selectedCardSetSize = room?.cardSetSize ?? 8
+  const selectedCardSetSize = normalizeCardSetSize(room?.cardSetSize)
   const selectedStartingCluesMode = room?.startingCluesMode ?? 'automatic'
   const canStart =
     isHost &&

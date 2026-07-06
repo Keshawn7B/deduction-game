@@ -34,12 +34,27 @@ export const LOCATIONS: Location[] = [
 ]
 
 export const CARD_SET_SIZES = [4, 6, 8] as const
+export const DEFAULT_CARD_SET_SIZE: CardSetSize = 8
+
+export type CardSetOptions = {
+  animals: Animal[]
+  disguises: Disguise[]
+  locations: Location[]
+}
 
 export function isCardSetSize(value: number): value is CardSetSize {
   return CARD_SET_SIZES.includes(value as CardSetSize)
 }
 
-export function getCardSetOptions(cardSetSize: CardSetSize = 8) {
+export function normalizeCardSetSize(value: unknown): CardSetSize {
+  return typeof value === 'number' && isCardSetSize(value)
+    ? value
+    : DEFAULT_CARD_SET_SIZE
+}
+
+export function getCardSetOptions(
+  cardSetSize: CardSetSize = DEFAULT_CARD_SET_SIZE,
+): CardSetOptions {
   return {
     animals: ANIMALS.slice(0, cardSetSize),
     disguises: DISGUISES.slice(0, cardSetSize),
@@ -47,7 +62,9 @@ export function getCardSetOptions(cardSetSize: CardSetSize = 8) {
   }
 }
 
-export function createDeck(cardSetSize: CardSetSize = 8): Card[] {
+export function createDeck(
+  cardSetSize: CardSetSize = DEFAULT_CARD_SET_SIZE,
+): Card[] {
   const cards: Card[] = []
   const { animals, disguises, locations } = getCardSetOptions(cardSetSize)
 
