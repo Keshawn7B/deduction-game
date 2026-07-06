@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import { RulesLegend } from './components/game/RulesLegend'
 import { GamePage } from './pages/GamePage'
 import { GuessPage } from './pages/GuessPage'
 import { HomePage } from './pages/HomePage'
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/game/:roomCode/guess" element={<GuessPage />} />
         <Route path="/winner/:roomCode" element={<WinnerPage />} />
       </Routes>
+      <RulesLegend />
     </main>
   )
 }

@@ -335,55 +335,6 @@ export function GamePage() {
 
         <main className="min-h-0 rounded-[2.5rem] border border-cyan-300/30 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/40 p-4 shadow-2xl shadow-cyan-950/30 lg:overflow-hidden">
           <div className="flex h-full min-h-[560px] flex-col gap-4 lg:min-h-0">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => setOpenPanel('hand')}
-                disabled={!playerState || isEliminated || busy}
-                className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-cyan-300 disabled:opacity-50"
-              >
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                  Hand
-                </p>
-                <p className="mt-2 text-3xl font-black text-cyan-300">
-                  {playerState?.hand.length ?? 0}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">
-                  {selectedCardId ? 'Card selected' : 'Click to choose reveal card'}
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOpenPanel('yesPile')}
-                disabled={!playerState || playerState.hideYesPile}
-                className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-emerald-300 disabled:opacity-50"
-              >
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                  YES pile
-                </p>
-                <p className="mt-2 text-3xl font-black text-emerald-300">
-                  {playerState?.hideYesPile ? 'Hidden' : (playerState?.yesPile.length ?? 0)}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">Your confirmed clues</p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOpenPanel('noPile')}
-                disabled={!playerState || playerState.hideNoPile}
-                className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-rose-300 disabled:opacity-50"
-              >
-                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-                  NO pile
-                </p>
-                <p className="mt-2 text-3xl font-black text-rose-300">
-                  {playerState?.hideNoPile ? 'Hidden' : (playerState?.noPile.length ?? 0)}
-                </p>
-                <p className="mt-1 text-xs text-slate-400">Your eliminated clues</p>
-              </button>
-            </div>
-
             <div className="grid flex-1 gap-4 lg:grid-cols-[1fr_280px] lg:overflow-hidden">
               <section className="flex min-h-[360px] flex-col justify-center rounded-[2rem] border border-cyan-300/20 bg-slate-950/70 p-5 text-center">
                 <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300">
@@ -470,6 +421,55 @@ export function GamePage() {
                     Around the board
                   </p>
                   <h2 className="mt-1 font-black text-slate-100">Quick buttons</h2>
+                </div>
+
+                <div className="grid gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel('hand')}
+                    disabled={!playerState || isEliminated || busy}
+                    className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-cyan-300 disabled:opacity-50"
+                  >
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                      Hand
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-cyan-300">
+                      {playerState?.hand.length ?? 0}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {selectedCardId ? 'Card selected' : 'Click to choose reveal card'}
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel('yesPile')}
+                    disabled={!playerState || playerState.hideYesPile}
+                    className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-emerald-300 disabled:opacity-50"
+                  >
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                      YES pile
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-emerald-300">
+                      {playerState?.hideYesPile ? 'Hidden' : (playerState?.yesPile.length ?? 0)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">Your confirmed clues</p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOpenPanel('noPile')}
+                    disabled={!playerState || playerState.hideNoPile}
+                    className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-rose-300 disabled:opacity-50"
+                  >
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
+                      NO pile
+                    </p>
+                    <p className="mt-2 text-3xl font-black text-rose-300">
+                      {playerState?.hideNoPile ? 'Hidden' : (playerState?.noPile.length ?? 0)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">Your eliminated clues</p>
+                  </button>
                 </div>
 
                 <Button
