@@ -346,6 +346,72 @@ export function GamePage() {
         </div>
       </header>
 
+      {isSetupPhase ? (
+        <div className="shrink-0 rounded-2xl border border-cyan-400/40 bg-cyan-950/20 p-4">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-2xl">
+              <h2 className="text-xl font-black text-cyan-200">Pick starting clues</h2>
+              <p className="mt-2 text-sm text-slate-300">
+                You are choosing one YES clue and one NO clue for{' '}
+                <span className="font-black text-white">
+                  {setupReceiver?.name ?? 'the next player'}
+                </span>
+                . Pick both cards from your hand. The app checks that the YES card really matches their hidden identity and the NO card does not.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
+              <label className="grid gap-2 text-sm font-bold text-slate-300">
+                YES clue
+                <select
+                  value={setupYesCardId}
+                  onChange={(event) => setSetupYesCardId(event.target.value)}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-slate-100"
+                  disabled={busy}
+                >
+                  <option value="">Choose a YES card</option>
+                  {playerState?.hand.map((card) => (
+                    <option key={`yes-${card.id}`} value={card.id}>
+                      {describeCard(card)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-2 text-sm font-bold text-slate-300">
+                NO clue
+                <select
+                  value={setupNoCardId}
+                  onChange={(event) => setSetupNoCardId(event.target.value)}
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-slate-100"
+                  disabled={busy}
+                >
+                  <option value="">Choose a NO card</option>
+                  {playerState?.hand.map((card) => (
+                    <option key={`no-${card.id}`} value={card.id}>
+                      {describeCard(card)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <Button
+                onClick={handleSubmitInitialClues}
+                disabled={busy || !setupYesCardId || !setupNoCardId || setupYesCardId === setupNoCardId}
+              >
+                {busy ? 'Submitting...' : 'Submit Starting Clues'}
+              </Button>
+            </div>
+          </div>
+
+          {setupReceiverIdentity ? (
+            <div className="mt-4 max-w-xs">
+              <CardView card={setupReceiverIdentity.hiddenIdentity} label={`${setupReceiver?.name ?? 'Player'} identity`} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[220px_minmax(0,1fr)_260px]">
         <aside className="min-h-0 rounded-[2rem] border border-slate-800 bg-slate-900/95 p-4 lg:overflow-y-auto">
           <div className="flex items-center justify-between gap-2 lg:block">
@@ -600,72 +666,6 @@ export function GamePage() {
           </div>
         </main>
       </div>
-
-      {isSetupPhase ? (
-        <div className="shrink-0 rounded-2xl border border-cyan-400/40 bg-cyan-950/20 p-4">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-2xl">
-              <h2 className="text-xl font-black text-cyan-200">Pick starting clues</h2>
-              <p className="mt-2 text-sm text-slate-300">
-                You are choosing one YES clue and one NO clue for{' '}
-                <span className="font-black text-white">
-                  {setupReceiver?.name ?? 'the next player'}
-                </span>
-                . Pick both cards from your hand. The app checks that the YES card really matches their hidden identity and the NO card does not.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[520px]">
-              <label className="grid gap-2 text-sm font-bold text-slate-300">
-                YES clue
-                <select
-                  value={setupYesCardId}
-                  onChange={(event) => setSetupYesCardId(event.target.value)}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-slate-100"
-                  disabled={busy}
-                >
-                  <option value="">Choose a YES card</option>
-                  {playerState?.hand.map((card) => (
-                    <option key={`yes-${card.id}`} value={card.id}>
-                      {describeCard(card)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="grid gap-2 text-sm font-bold text-slate-300">
-                NO clue
-                <select
-                  value={setupNoCardId}
-                  onChange={(event) => setSetupNoCardId(event.target.value)}
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-slate-100"
-                  disabled={busy}
-                >
-                  <option value="">Choose a NO card</option>
-                  {playerState?.hand.map((card) => (
-                    <option key={`no-${card.id}`} value={card.id}>
-                      {describeCard(card)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <Button
-                onClick={handleSubmitInitialClues}
-                disabled={busy || !setupYesCardId || !setupNoCardId || setupYesCardId === setupNoCardId}
-              >
-                {busy ? 'Submitting...' : 'Submit Starting Clues'}
-              </Button>
-            </div>
-          </div>
-
-          {setupReceiverIdentity ? (
-            <div className="mt-4 max-w-xs">
-              <CardView card={setupReceiverIdentity.hiddenIdentity} label={`${setupReceiver?.name ?? 'Player'} identity`} />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
 
       {openPanel ? (
         <div

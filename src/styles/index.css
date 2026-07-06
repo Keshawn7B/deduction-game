@@ -92,10 +92,246 @@ body {
   }
 }
 
+.home-whimsy-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.home-whimsy-cloud,
+.home-whimsy-sparkle,
+.home-whimsy-card,
+.home-whimsy-rainbow,
+.home-whimsy-moon,
+.home-whimsy-orb,
+.home-whimsy-token {
+  position: absolute;
+  display: block;
+}
+
+.home-whimsy-rainbow {
+  left: 3%;
+  top: 5%;
+  width: min(32rem, 45vw);
+  height: min(16rem, 24vw);
+  border-radius: 999px 999px 0 0;
+  background:
+    radial-gradient(ellipse at 50% 100%, transparent 0 48%, rgba(2, 6, 23, 0.35) 49% 52%, transparent 53%),
+    conic-gradient(from 270deg at 50% 100%, #fb7185 0 12deg, #f59e0b 12deg 24deg, #facc15 24deg 36deg, #22c55e 36deg 48deg, #22d3ee 48deg 60deg, #8b5cf6 60deg 72deg, transparent 72deg 360deg);
+  filter: blur(0.4px) drop-shadow(0 0 34px rgba(34, 211, 238, 0.34));
+  opacity: 0.38;
+  transform: rotate(-8deg);
+}
+
+.home-whimsy-moon {
+  right: 17%;
+  top: 8%;
+  width: 5.75rem;
+  height: 5.75rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 34%, rgba(255, 255, 255, 0.75) 0 8%, transparent 9%),
+    radial-gradient(circle at 62% 58%, rgba(255, 255, 255, 0.32) 0 10%, transparent 11%),
+    linear-gradient(145deg, #fde68a, #f9a8d4 52%, #67e8f9);
+  box-shadow: 0 0 42px rgba(253, 224, 71, 0.45), inset -18px -14px 28px rgba(124, 58, 237, 0.3);
+  opacity: 0.72;
+}
+
+.home-whimsy-orb {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #22c55e, #22d3ee);
+  box-shadow: 0 0 34px rgba(34, 211, 238, 0.75);
+  opacity: 0.88;
+}
+
+.home-whimsy-orb-one {
+  left: 9%;
+  top: 56%;
+}
+
+.home-whimsy-orb-two {
+  right: 13%;
+  top: 63%;
+  width: 1.35rem;
+  height: 1.35rem;
+  background: linear-gradient(135deg, #f472b6, #facc15);
+  box-shadow: 0 0 30px rgba(244, 114, 182, 0.82);
+}
+
+.home-whimsy-cloud {
+  width: 12rem;
+  height: 5rem;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 22% 50%, rgba(255, 255, 255, 0.9) 0 28%, transparent 29%),
+    radial-gradient(circle at 48% 36%, rgba(255, 255, 255, 0.84) 0 34%, transparent 35%),
+    radial-gradient(circle at 72% 52%, rgba(255, 255, 255, 0.76) 0 29%, transparent 30%),
+    linear-gradient(90deg, rgba(125, 211, 252, 0.46), rgba(254, 240, 138, 0.42));
+  filter: drop-shadow(0 18px 28px rgba(8, 47, 73, 0.28));
+  opacity: 0.9;
+}
+
+.home-whimsy-cloud-one {
+  left: max(1rem, 6vw);
+  top: 13%;
+  transform: rotate(-4deg);
+}
+
+.home-whimsy-cloud-two {
+  right: max(1rem, 8vw);
+  top: 18%;
+  width: 8.5rem;
+  height: 3.6rem;
+  transform: rotate(6deg) scaleX(-1);
+  opacity: 0.58;
+}
+
+.home-whimsy-sparkle {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  background: #fde047;
+  box-shadow:
+    0 0 0 0.55rem rgba(253, 224, 71, 0.14),
+    0 0 38px rgba(253, 224, 71, 0.95);
+  animation: home-sparkle-twinkle 3.6s ease-in-out infinite;
+}
+
+.home-whimsy-sparkle-one {
+  left: 18%;
+  top: 34%;
+}
+
+.home-whimsy-sparkle-two {
+  right: 23%;
+  top: 38%;
+  background: #f9a8d4;
+  box-shadow:
+    0 0 0 0.45rem rgba(249, 168, 212, 0.08),
+    0 0 32px rgba(249, 168, 212, 0.72);
+  animation-delay: 0.8s;
+}
+
+.home-whimsy-sparkle-three {
+  right: 15%;
+  bottom: 27%;
+  background: #4ade80;
+  box-shadow:
+    0 0 0 0.55rem rgba(74, 222, 128, 0.14),
+    0 0 34px rgba(74, 222, 128, 0.82);
+  animation-delay: 1.6s;
+}
+
+.home-whimsy-sparkle-four {
+  left: 29%;
+  bottom: 18%;
+  background: #38bdf8;
+  box-shadow:
+    0 0 0 0.55rem rgba(56, 189, 248, 0.14),
+    0 0 34px rgba(56, 189, 248, 0.9);
+  animation-delay: 2.2s;
+}
+
+.home-whimsy-card {
+  width: 4.6rem;
+  height: 6.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.82) 0 10%, transparent 11%),
+    linear-gradient(145deg, rgba(34, 211, 238, 0.82), rgba(168, 85, 247, 0.54) 48%, rgba(251, 191, 36, 0.76));
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.44), 0 0 30px rgba(34, 211, 238, 0.28);
+  opacity: 0.88;
+}
+
+.home-whimsy-card-one {
+  left: 8%;
+  bottom: 18%;
+  transform: rotate(-13deg);
+}
+
+.home-whimsy-card-two {
+  right: 9%;
+  bottom: 20%;
+  transform: rotate(12deg);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.78) 0 10%, transparent 11%),
+    linear-gradient(145deg, rgba(251, 191, 36, 0.84), rgba(244, 114, 182, 0.7) 48%, rgba(34, 211, 238, 0.74));
+}
+
+.home-whimsy-card-three {
+  left: 18%;
+  top: 43%;
+  width: 3.5rem;
+  height: 4.7rem;
+  transform: rotate(18deg);
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.78) 0 10%, transparent 11%),
+    linear-gradient(145deg, rgba(74, 222, 128, 0.78), rgba(34, 211, 238, 0.64) 52%, rgba(244, 114, 182, 0.72));
+}
+
+.home-whimsy-token {
+  width: 4.25rem;
+  height: 4.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 1.3rem;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.36), 0 0 28px rgba(250, 204, 21, 0.18);
+  opacity: 0.8;
+}
+
+.home-whimsy-token::before {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.home-whimsy-token-bird {
+  right: 23%;
+  bottom: 15%;
+  background: linear-gradient(145deg, rgba(14, 165, 233, 0.72), rgba(217, 70, 239, 0.58));
+  transform: rotate(-9deg);
+}
+
+.home-whimsy-token-bird::before {
+  content: '◇';
+}
+
+.home-whimsy-token-leaf {
+  left: 23%;
+  bottom: 13%;
+  background: linear-gradient(145deg, rgba(34, 197, 94, 0.72), rgba(250, 204, 21, 0.64));
+  transform: rotate(10deg);
+}
+
+.home-whimsy-token-leaf::before {
+  content: '✦';
+}
+
+@keyframes home-sparkle-twinkle {
+  0%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.48;
+  }
+
+  48% {
+    transform: scale(1.16);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flocked-title,
   .flocked-title::after,
-  .flocked-title-letter {
+  .flocked-title-letter,
+  .home-whimsy-sparkle {
     animation: none;
   }
 }
