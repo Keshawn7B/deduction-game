@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react'
-import {
-  accessoryAssets,
-  animalAssets,
-  backgroundAssets,
-} from '../../game/cardAssets'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { matchPath, useLocation } from 'react-router-dom'
+import { listenToRoom } from '../../firebase/rooms'
+import { getLegendGroups } from '../../game/cardSetLegend'
+import { DEFAULT_CARD_SET_SIZE, normalizeCardSetSize } from '../../game/deck'
+import type { CardSetSize } from '../../types/card'
 
 const rules = [
   'Your secret identity is one animal, one accessory, and one background.',
@@ -14,11 +14,47 @@ const rules = [
   'Guess carefully: three wrong guesses knocks you out.',
 ]
 
-const animalEntries = Object.entries(animalAssets)
-const backgroundEntries = Object.entries(backgroundAssets)
-const accessoryEntries = Object.entries(accessoryAssets)
+const ROOM_ROUTE_PATTERNS = [
+  '/lobby/:roomCode',
+  '/game/:roomCode',
+  '/game/:roomCode/guess',
+  '/winner/:roomCode',
+]
+
+function getRoomCodeFromPath(pathname: string): string {
+  for (const pattern of ROOM_ROUTE_PATTERNS) {
+    const match = matchPath(pattern, pathname)
+
+    if (match?.params.roomCode) {
+      return match.params.roomCode
+    }
+  }
+
+  return ''
+}
 
 export function RulesLegend() {
+  const location = useLocation()
+  const roomCode = useMemo(
+    () => getRoomCodeFromPath(location.pathname),
+    [location.pathname],
+  )
+  const [roomCardSetSize, setRoomCardSetSize] = useState<CardSetSize>(
+    DEFAULT_CARD_SET_SIZE,
+  )
+  const cardSetSize = roomCode ? roomCardSetSize : DEFAULT_CARD_SET_SIZE
+  const legendGroups = useMemo(() => getLegendGroups(cardSetSize), [cardSetSize])
+
+  useEffect(() => {
+    if (!roomCode) {
+      return
+    }
+
+    return listenToRoom(roomCode, (room) => {
+      setRoomCardSetSize(normalizeCardSetSize(room?.cardSetSize))
+    })
+  }, [roomCode])
+
   return (
     <aside className="fixed bottom-3 left-3 right-3 z-40 mx-auto max-w-5xl rounded-3xl border border-cyan-300/30 bg-slate-950/95 p-3 text-slate-100 shadow-2xl shadow-slate-950/60 backdrop-blur md:left-4 md:right-auto md:max-w-md">
       <details>
@@ -44,26 +80,21 @@ export function RulesLegend() {
           <section className="mt-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3">
             <h2 className="text-lg font-black">Legend</h2>
             <p className="mt-1 text-xs text-slate-400">
-              Every card is made from one animal, one background, and one accessory.
+              This game is using the {cardSetSize}x{cardSetSize}x{cardSetSize} card set.
             </p>
 
-            <LegendGroup title="8 animals">
-              {animalEntries.map(([name, asset]) => (
-                <LegendItem key={name} name={name} image={asset.src} alt={asset.alt} />
-              ))}
-            </LegendGroup>
-
-            <LegendGroup title="8 backgrounds">
-              {backgroundEntries.map(([name, image]) => (
-                <LegendItem key={name} name={name} image={image} alt={`${name} background`} />
-              ))}
-            </LegendGroup>
-
-            <LegendGroup title="8 accessories">
-              {accessoryEntries.map(([name, asset]) => (
-                <LegendItem key={name} name={name} image={asset.src} alt={asset.alt} />
-              ))}
-            </LegendGroup>
+            {legendGroups.map((group) => (
+              <LegendGroup key={group.name} title={group.title}>
+                {group.items.map((item) => (
+                  <LegendItem
+                    key={item.name}
+                    name={item.name}
+                    image={item.image}
+                    alt={item.alt}
+                  />
+                ))}
+              </LegendGroup>
+            ))}
           </section>
         </div>
       </details>
