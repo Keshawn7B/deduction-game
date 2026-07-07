@@ -322,7 +322,7 @@ export async function setRoomCardSetSize(params: {
   cardSetSize: CardSetSize
 }) {
   if (!isCardSetSize(params.cardSetSize)) {
-    throw new Error('Choose 4x4x4, 6x6x6, or 8x8x8 cards.')
+    throw new Error('Choose 6x6x6, 7x7x7, or 8x8x8 cards.')
   }
 
   const { roomRef } = await getEditableLobbyRoom({

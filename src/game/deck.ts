@@ -33,7 +33,7 @@ export const LOCATIONS: Location[] = [
   'Library',
 ]
 
-export const CARD_SET_SIZES = [4, 6, 8] as const
+export const CARD_SET_SIZES = [6, 7, 8] as const
 export const DEFAULT_CARD_SET_SIZE: CardSetSize = 8
 
 export type CardSetOptions = {

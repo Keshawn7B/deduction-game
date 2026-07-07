@@ -44,4 +44,4 @@ export type Guess = {
 
 export type ClueResult = 'YES' | 'NO'
 
-export type CardSetSize = 4 | 6 | 8
+export type CardSetSize = 6 | 7 | 8

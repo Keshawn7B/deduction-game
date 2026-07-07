@@ -21,7 +21,9 @@ describe('game rules', () => {
   })
 
   it('creates smaller unique decks for lobby card set choices', () => {
-    for (const cardSetSize of [4, 6, 8] as const) {
+    expect(CARD_SET_SIZES).toEqual([6, 7, 8])
+
+    for (const cardSetSize of [6, 7, 8] as const) {
       const deck = createDeck(cardSetSize)
       const ids = new Set(deck.map((card) => card.id))
 
@@ -99,7 +101,7 @@ describe('game rules', () => {
   })
 
   it('uses the selected lobby card set size when creating initial state', () => {
-    for (const cardSetSize of [4, 6, 8] as const) {
+    for (const cardSetSize of [6, 7, 8] as const) {
       const state = createInitialGameState(
         ['player-1', 'player-2'],
         () => 0.5,
