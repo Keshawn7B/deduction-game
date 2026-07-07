@@ -14,7 +14,7 @@ body {
   background: #020617;
 }
 
-.flocked-title {
+.deducktion-title {
   position: relative;
   display: inline-flex;
   isolation: isolate;
@@ -30,8 +30,8 @@ body {
     drop-shadow(0 22px 34px rgba(0, 0, 0, 0.55));
 }
 
-.flocked-title::before {
-  content: 'Flocked';
+.deducktion-title::before {
+  content: 'Deducktion';
   position: absolute;
   inset: 0;
   z-index: -1;
@@ -41,8 +41,8 @@ body {
   filter: blur(1px);
 }
 
-.flocked-title::after {
-  content: 'Flocked';
+.deducktion-title::after {
+  content: 'Deducktion';
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -59,19 +59,19 @@ body {
   background-clip: text;
   color: transparent;
   mix-blend-mode: screen;
-  animation: flocked-title-shine 4.6s ease-in-out infinite;
+  animation: deducktion-title-shine 4.6s ease-in-out infinite;
 }
 
-.flocked-title-letter {
+.deducktion-title-letter {
   display: inline-block;
   background: linear-gradient(180deg, #ffffff 0%, #e0faff 36%, #67e8f9 100%);
   background-clip: text;
   color: transparent;
-  animation: flocked-letter-float 3.8s ease-in-out infinite;
+  animation: deducktion-letter-float 3.8s ease-in-out infinite;
   transform-origin: center bottom;
 }
 
-@keyframes flocked-letter-float {
+@keyframes deducktion-letter-float {
   0%,
   100% {
     transform: translateY(0) rotate(0deg);
@@ -81,7 +81,7 @@ body {
   }
 }
 
-@keyframes flocked-title-shine {
+@keyframes deducktion-title-shine {
   0%,
   24% {
     background-position: 180% 50%;
@@ -328,9 +328,9 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flocked-title,
-  .flocked-title::after,
-  .flocked-title-letter,
+  .deducktion-title,
+  .deducktion-title::after,
+  .deducktion-title-letter,
   .home-whimsy-sparkle {
     animation: none;
   }

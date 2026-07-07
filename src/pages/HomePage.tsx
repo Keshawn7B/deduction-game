@@ -12,7 +12,7 @@ const titleFeatureChips = [
   `${defaultCardSetOptions.locations.length} backgrounds`,
   `${defaultCardSetOptions.disguises.length} accessories`,
 ]
-const titleLetters = 'Flocked'.split('')
+const titleLetters = 'Deducktion'.split('')
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -90,13 +90,13 @@ export function HomePage() {
           </div>
 
           <h1
-            className="flocked-title text-7xl font-black leading-none sm:text-8xl lg:text-9xl"
-            aria-label="Flocked"
+            className="deducktion-title text-7xl font-black leading-none sm:text-8xl lg:text-9xl"
+            aria-label="Deducktion"
           >
             {titleLetters.map((letter, index) => (
               <span
                 key={`${letter}-${index}`}
-                className="flocked-title-letter"
+                className="deducktion-title-letter"
                 style={{ animationDelay: `${index * 90}ms` }}
                 aria-hidden="true"
               >
@@ -117,7 +117,7 @@ export function HomePage() {
                 Play now
               </p>
               <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">
-                Join the flock
+                Join the game
               </h2>
             </div>
 
