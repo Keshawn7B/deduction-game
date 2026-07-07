@@ -11,7 +11,8 @@ const rules = [
   'If that card shares anything with your secret identity, answer YES.',
   'If it shares nothing with your secret identity, answer NO.',
   'Use the public clues and guesses to deduce each player’s identity.',
-  'Guess carefully: three wrong guesses knocks you out.',
+  'First wrong guess: choose one clue pile to hide. Second hides both.',
+  'Third wrong guess knocks you out.',
 ]
 
 const ROOM_ROUTE_PATTERNS = [

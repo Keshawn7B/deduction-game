@@ -1,4 +1,4 @@
-import type { SyntheticEvent } from 'react'
+import type { CSSProperties, SyntheticEvent } from 'react'
 import type { Card } from '../../types/card'
 import {
   animalAssets,
@@ -6,6 +6,7 @@ import {
   backgroundFallbacks,
   getAccessoryAsset,
   normalizeAccessory,
+  type LayerPosition,
 } from '../../game/cardAssets'
 
 type LayeredCardArtProps = {
@@ -14,6 +15,15 @@ type LayeredCardArtProps = {
 
 function hideBrokenImage(event: SyntheticEvent<HTMLImageElement>) {
   event.currentTarget.style.display = 'none'
+}
+
+function layerStyle(position: LayerPosition): CSSProperties {
+  return {
+    left: `${position.left}%`,
+    top: `${position.top}%`,
+    width: `${position.width}%`,
+    height: `${position.height}%`,
+  }
 }
 
 export function LayeredCardArt({ card }: LayeredCardArtProps) {
@@ -41,7 +51,8 @@ export function LayeredCardArt({ card }: LayeredCardArtProps) {
       <img
         src={animal.src}
         alt={animal.alt}
-        className={`absolute object-contain object-center drop-shadow-2xl ${animal.className}`}
+        className="absolute object-contain object-center drop-shadow-2xl"
+        style={layerStyle(animal.position)}
         draggable={false}
         onError={hideBrokenImage}
       />
@@ -49,7 +60,8 @@ export function LayeredCardArt({ card }: LayeredCardArtProps) {
       <img
         src={accessory.src}
         alt={accessory.alt}
-        className={`absolute object-contain object-center drop-shadow-xl ${accessory.className}`}
+        className="absolute object-contain object-center drop-shadow-xl"
+        style={layerStyle(accessory.position)}
         draggable={false}
         onError={hideBrokenImage}
       />

@@ -15,6 +15,7 @@ import {
   getCardSetOptions,
   normalizeCardSetSize,
 } from '../game/deck'
+import type { HiddenCluePileChoice } from '../game/guess'
 import type { Animal, Disguise, Location } from '../types/card'
 import type { PlayerGameState, PlayerIdentityDoc } from '../types/game'
 import type { LobbyPlayer, RoomDoc } from '../types/room'
@@ -45,6 +46,8 @@ export function GuessPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [pileToHideOnWrongGuess, setPileToHideOnWrongGuess] =
+    useState<HiddenCluePileChoice>('YES')
 
   useEffect(() => {
     if (!roomCode || !user) return
@@ -120,6 +123,7 @@ export function GuessPage() {
           disguise: selectedDisguise,
           location: selectedLocation,
         },
+        pileToHideOnWrongGuess,
       })
 
       if (result.correct || result.gameFinished) {
@@ -233,6 +237,38 @@ export function GuessPage() {
                 <p className="rounded-xl border border-rose-500/50 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">
                   {error}
                 </p>
+              ) : null}
+
+              {(playerState?.wrongGuesses ?? 0) === 0 ? (
+                <fieldset className="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                  <legend className="px-1 text-sm font-bold text-slate-200">
+                    If this guess is wrong, hide my:
+                  </legend>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {(['YES', 'NO'] as const).map((pile) => (
+                      <label
+                        key={pile}
+                        className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm font-bold"
+                      >
+                        <input
+                          type="radio"
+                          name="pileToHideOnWrongGuess"
+                          value={pile}
+                          checked={pileToHideOnWrongGuess === pile}
+                          onChange={() => setPileToHideOnWrongGuess(pile)}
+                        />
+                        <span
+                          className={
+                            pile === 'YES' ? 'text-emerald-300' : 'text-rose-300'
+                          }
+                        >
+                          {pile} pile
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
               ) : null}
 
               <Button

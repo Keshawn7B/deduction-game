@@ -7,7 +7,7 @@ import {
   createDeck,
   getCardSetOptions,
 } from './deck'
-import { isCorrectGuess } from './guess'
+import { applyWrongGuessPenalty, isCorrectGuess } from './guess'
 import { getClueResult, validatePlayerCount } from './rules'
 import { createInitialGameState } from './setup'
 
@@ -82,6 +82,31 @@ describe('game rules', () => {
         location: 'Beach',
       }),
     ).toBe(true)
+  })
+
+  it('lets the player choose which clue pile is hidden after the first wrong guess', () => {
+    expect(applyWrongGuessPenalty(0, 'NO')).toEqual({
+      wrongGuesses: 1,
+      hideYesPile: false,
+      hideNoPile: true,
+      eliminated: false,
+    })
+
+    expect(applyWrongGuessPenalty(0, 'YES')).toEqual({
+      wrongGuesses: 1,
+      hideYesPile: true,
+      hideNoPile: false,
+      eliminated: false,
+    })
+  })
+
+  it('hides both clue piles after a second wrong guess', () => {
+    expect(applyWrongGuessPenalty(1, 'NO')).toEqual({
+      wrongGuesses: 2,
+      hideYesPile: true,
+      hideNoPile: true,
+      eliminated: false,
+    })
   })
 
   it('starts each player with one valid YES clue and one valid NO clue', () => {

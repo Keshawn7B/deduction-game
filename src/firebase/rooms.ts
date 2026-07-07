@@ -14,7 +14,11 @@ import {
   writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore'
-import { applyWrongGuessPenalty, isCorrectGuess } from '../game/guess'
+import {
+  applyWrongGuessPenalty,
+  type HiddenCluePileChoice,
+  isCorrectGuess,
+} from '../game/guess'
 import { appendPublicGuess, createPublicGuess } from '../game/publicGuess'
 import { isCardSetSize, normalizeCardSetSize } from '../game/deck'
 import { appendPublicReveal, createPublicReveal } from '../game/publicReveal'
@@ -992,6 +996,7 @@ export async function makeGuess(params: {
   roomCode: string
   playerId: string
   guess: Guess
+  pileToHideOnWrongGuess?: HiddenCluePileChoice
 }) {
   const roomCode = normalizeRoomCode(params.roomCode)
   const roomRef = doc(db, 'rooms', roomCode)
@@ -1073,7 +1078,10 @@ export async function makeGuess(params: {
       }
     }
 
-    const penalty = applyWrongGuessPenalty(playerState.wrongGuesses)
+    const penalty = applyWrongGuessPenalty(
+      playerState.wrongGuesses,
+      params.pileToHideOnWrongGuess,
+    )
 
     const nextPlayerState: PlayerGameState = {
       ...playerState,

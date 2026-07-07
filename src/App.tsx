@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import { RulesLegend } from './components/game/RulesLegend'
 import { GameBackdrop } from './components/layout/GameBackdrop'
+import { AccessoryEditorPage } from './pages/AccessoryEditorPage'
 import { GamePage } from './pages/GamePage'
 import { GuessPage } from './pages/GuessPage'
 import { HomePage } from './pages/HomePage'
@@ -14,6 +15,7 @@ export default function App() {
       <div className="relative z-10">
         <Routes>
           <Route path="/" element={<HomePage />} />
+          <Route path="/accessory-editor" element={<AccessoryEditorPage />} />
           <Route path="/lobby/:roomCode" element={<LobbyPage />} />
           <Route path="/game/:roomCode" element={<GamePage />} />
           <Route path="/game/:roomCode/guess" element={<GuessPage />} />
