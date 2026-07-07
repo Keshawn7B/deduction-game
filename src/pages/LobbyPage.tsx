@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { RoomChat } from '../components/room/RoomChat'
 import { RoomShareBox } from '../components/room/RoomShareBox'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
@@ -297,13 +298,14 @@ export function LobbyPage() {
                     </span>
 
                     {canRemovePlayer ? (
-                      <Button
-                        variant="danger"
+                      <button
+                        type="button"
                         onClick={() => handleRemovePlayer(player)}
                         disabled={removingPlayerId === player.id || busy}
+                        className="rounded-lg bg-rose-500 px-2.5 py-1 text-xs font-bold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {removingPlayerId === player.id ? 'Removing...' : 'Remove'}
-                      </Button>
+                      </button>
                     ) : null}
                   </div>
                 </div>
@@ -318,6 +320,11 @@ export function LobbyPage() {
 
         <div className="space-y-4">
           <RoomShareBox roomCode={roomCode} />
+          <RoomChat
+            roomCode={roomCode}
+            userId={user?.uid}
+            canChat={Boolean(currentPlayer)}
+          />
 
           {!currentPlayer ? (
             <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">

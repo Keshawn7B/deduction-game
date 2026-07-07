@@ -6,14 +6,20 @@ import { DEFAULT_CARD_SET_SIZE, normalizeCardSetSize } from '../../game/deck'
 import type { CardSetSize } from '../../types/card'
 
 const rules = [
-  'Your secret identity is one animal, one accessory, and one background.',
-  'On your turn, reveal a card from your hand as a clue.',
-  'If that card shares anything with your secret identity, answer YES.',
-  'If it shares nothing with your secret identity, answer NO.',
-  'Use the public clues and guesses to deduce each player’s identity.',
-  'First wrong guess: choose one clue pile to hide. Second hides both.',
-  'Third wrong guess knocks you out.',
+  'Your hidden identity consists of 1 Animal, 1 Accessory, and 1 Background.',
+  'On your turn, reveal 1 clue card.',
+  'If the clue matches any part of your hidden identity, it goes to your YES pile. Otherwise, it goes to your NO pile.',
+  'Use the clues in your YES and NO piles to determine your complete hidden identity.',
+  'When you’re confident, guess your full hidden identity (Animal + Accessory + Background).',
 ]
+
+const guessPenalties = [
+  'One incorrect guess: One clue pile is hidden.',
+  'Two incorrect guesses: Both clue piles are hidden.',
+  'Three incorrect guesses: You’re eliminated from the game.',
+]
+
+const winningRule = 'The first player to correctly guess their complete hidden identity wins.'
 
 const ROOM_ROUTE_PATTERNS = [
   '/lobby/:roomCode',
@@ -75,6 +81,25 @@ export function RulesLegend() {
                   <span>{rule}</span>
                 </li>
               ))}
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-300 text-xs font-black text-slate-950">
+                  {rules.length + 1}
+                </span>
+                <span>
+                  Guess penalties:
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-slate-300">
+                    {guessPenalties.map((penalty) => (
+                      <li key={penalty}>{penalty}</li>
+                    ))}
+                  </ul>
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-cyan-300 text-xs font-black text-slate-950">
+                  {rules.length + 2}
+                </span>
+                <span>{winningRule}</span>
+              </li>
             </ol>
           </section>
 

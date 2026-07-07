@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -26,6 +27,7 @@ import { getClueResult } from '../game/rules'
 import { createInitialGameState } from '../game/setup'
 import type { StartingCluesMode } from '../game/setup'
 import type { Card, CardSetSize, Guess } from '../types/card'
+import type { RoomChatMessage } from '../types/chat'
 import type {
   PlayerGameState,
   PlayerIdentityDoc,
@@ -66,6 +68,15 @@ function drawOne(deck: Card[]) {
   return {
     drawnCard: drawnCard ?? null,
     remainingDeck,
+  }
+}
+
+function getPublicCluePileFields(playerState: PlayerGameState) {
+  return {
+    yesPile: playerState.yesPile,
+    noPile: playerState.noPile,
+    hideYesPile: playerState.hideYesPile,
+    hideNoPile: playerState.hideNoPile,
   }
 }
 
@@ -457,6 +468,7 @@ export async function startGame(params: {
       transaction.update(doc(db, 'rooms', roomCode, 'players', playerState.playerId), {
         wrongGuesses: 0,
         eliminated: false,
+        ...getPublicCluePileFields(state),
       })
     }
 
@@ -642,6 +654,8 @@ export async function submitInitialClues(params: {
 
     transaction.set(giverStateRef, nextGiverState)
     transaction.set(receiverStateRef, nextReceiverState)
+    transaction.update(doc(db, 'rooms', roomCode, 'players', params.giverId), getPublicCluePileFields(nextGiverState))
+    transaction.update(doc(db, 'rooms', roomCode, 'players', receiver.id), getPublicCluePileFields(nextReceiverState))
     transaction.set(deckRef, {
       deck: remainingDeck,
       discardPile: deckState.discardPile,
@@ -859,6 +873,7 @@ async function revealCardAutomatic(params: {
     })
 
     transaction.set(playerStateRef, nextPlayerState)
+    transaction.update(doc(db, 'rooms', roomCode, 'players', params.playerId), getPublicCluePileFields(nextPlayerState))
     transaction.set(deckRef, nextDeckState)
     transaction.update(roomRef, {
       currentTurnPlayerId: nextTurnPlayerId,
@@ -973,6 +988,7 @@ export async function submitRevealResponse(params: {
     })
 
     transaction.set(revealerStateRef, nextRevealerState)
+    transaction.update(doc(db, 'rooms', roomCode, 'players', revealerId), getPublicCluePileFields(nextRevealerState))
     transaction.set(deckRef, nextDeckState)
     transaction.update(roomRef, {
       pendingReveal: null,
@@ -1101,6 +1117,7 @@ export async function makeGuess(params: {
 
     transaction.set(playerStateRef, nextPlayerState)
     transaction.update(playerRef, {
+      ...getPublicCluePileFields(nextPlayerState),
       wrongGuesses: penalty.wrongGuesses,
       eliminated: penalty.eliminated,
     })
@@ -1405,6 +1422,7 @@ export async function leaveGame(params: {
     transaction.set(playerStateRef, nextPlayerState)
 
     transaction.update(playerRef, {
+      ...getPublicCluePileFields(nextPlayerState),
       eliminated: true,
     })
 
@@ -1549,6 +1567,57 @@ export function listenToIdentities(
       callback(identities)
     },
   )
+}
+
+export function listenToRoomChat(
+  roomCode: string,
+  callback: (messages: RoomChatMessage[]) => void,
+): Unsubscribe {
+  const chatQuery = query(
+    collection(db, 'rooms', normalizeRoomCode(roomCode), 'chat'),
+    orderBy('createdAt', 'desc'),
+    limit(40),
+  )
+
+  return onSnapshot(chatQuery, (snapshot) => {
+    const messages = snapshot.docs
+      .map((messageDoc) => ({
+        id: messageDoc.id,
+        ...(messageDoc.data() as Omit<RoomChatMessage, 'id'>),
+      }))
+      .reverse()
+
+    callback(messages)
+  })
+}
+
+export async function sendRoomChatMessage(params: {
+  roomCode: string
+  playerId: string
+  message: string
+}) {
+  const roomCode = normalizeRoomCode(params.roomCode)
+  const message = params.message.trim().slice(0, 240)
+
+  if (!message) {
+    throw new Error('Type a message first.')
+  }
+
+  const playerRef = doc(db, 'rooms', roomCode, 'players', params.playerId)
+  const playerSnap = await getDoc(playerRef)
+
+  if (!playerSnap.exists()) {
+    throw new Error('Join the room before chatting.')
+  }
+
+  const player = playerSnap.data() as Omit<LobbyPlayer, 'id'>
+
+  await addDoc(collection(db, 'rooms', roomCode, 'chat'), {
+    playerId: params.playerId,
+    playerName: player.name,
+    message,
+    createdAt: serverTimestamp(),
+  })
 }
 
 export function listenToGameLog(

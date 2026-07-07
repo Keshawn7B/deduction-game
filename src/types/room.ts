@@ -36,4 +36,8 @@ export type LobbyPlayer = {
   joinedAt: unknown
   wrongGuesses?: number
   eliminated?: boolean
+  yesPile?: Card[]
+  noPile?: Card[]
+  hideYesPile?: boolean
+  hideNoPile?: boolean
 }

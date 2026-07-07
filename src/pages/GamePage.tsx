@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CardView } from '../components/game/CardView'
+import { RoomChat } from '../components/room/RoomChat'
 import { Button } from '../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -38,7 +39,7 @@ export function GamePage() {
   const [identities, setIdentities] = useState<PlayerIdentityDoc[]>([])
   const [gameLog, setGameLog] = useState<GameLogEntry[]>([])
   const [openPanel, setOpenPanel] = useState<
-    'table' | 'hand' | 'yesPile' | 'noPile' | 'identities' | 'player' | null
+    'table' | 'reveal' | 'hand' | 'yesPile' | 'noPile' | 'identities' | 'player' | null
   >(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
   const [selectedCardId, setSelectedCardId] = useState('')
@@ -143,6 +144,11 @@ export function GamePage() {
     [identities, user?.uid],
   )
 
+  const currentPlayer = useMemo(
+    () => players.find((player) => player.id === user?.uid) ?? null,
+    [players, user?.uid],
+  )
+
   const playerNameById = useMemo(() => {
     return new Map(players.map((player) => [player.id, player.name]))
   }, [players])
@@ -159,13 +165,35 @@ export function GamePage() {
     return identities.find((identity) => identity.playerId === selectedPlayerId) ?? null
   }, [identities, selectedPlayerId])
 
+  const selectedPlayerClues = useMemo(() => {
+    if (!selectedPlayerId) return null
+
+    if (selectedPlayerId === user?.uid && playerState) {
+      return playerState
+    }
+
+    if (!selectedPlayer?.yesPile || !selectedPlayer.noPile) {
+      return null
+    }
+
+    return {
+      playerId: selectedPlayer.id,
+      yesPile: selectedPlayer.yesPile,
+      noPile: selectedPlayer.noPile,
+      hideYesPile: selectedPlayer.hideYesPile ?? false,
+      hideNoPile: selectedPlayer.hideNoPile ?? false,
+    }
+  }, [playerState, selectedPlayer, selectedPlayerId, user?.uid])
+
   const selectedPlayerIsYou = selectedPlayerId === user?.uid
 
   const openPanelTitle =
     openPanel === 'table'
       ? 'Table view'
-      : openPanel === 'hand'
-        ? 'Your cards'
+      : openPanel === 'reveal'
+        ? 'Reveal a clue card'
+        : openPanel === 'hand'
+          ? 'Your cards'
         : openPanel === 'yesPile'
           ? 'Your YES pile'
           : openPanel === 'noPile'
@@ -177,7 +205,7 @@ export function GamePage() {
                 : ''
 
   const openPanelCards =
-    openPanel === 'hand'
+    openPanel === 'reveal' || openPanel === 'hand'
       ? (playerState?.hand ?? [])
       : openPanel === 'yesPile'
         ? playerState?.hideYesPile
@@ -218,8 +246,8 @@ export function GamePage() {
     }
   }
 
-  async function handleRevealCard() {
-    if (!user || !selectedCardId) return
+  async function handleRevealCard(cardId = selectedCardId) {
+    if (!user || !cardId) return
 
     setBusy(true)
     setError('')
@@ -229,7 +257,7 @@ export function GamePage() {
       const result = await revealCard({
         roomCode,
         playerId: user.uid,
-        cardId: selectedCardId,
+        cardId,
       })
 
       setMessage(
@@ -238,6 +266,7 @@ export function GamePage() {
           : `Card revealed. Result: ${result}.`,
       )
       setSelectedCardId('')
+      setOpenPanel(null)
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Could not reveal card.')
     } finally {
@@ -287,21 +316,15 @@ export function GamePage() {
       <header className="flex shrink-0 flex-col gap-3 rounded-[2rem] border border-slate-800 bg-slate-950/90 p-4 shadow-2xl shadow-slate-950/40 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">
-            Deduction table
+            Deducktion
           </p>
-          <h1 className="mt-1 text-2xl font-black sm:text-3xl">Room {roomCode}</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            One-screen board · players on the rail · current turn in the center
-          </p>
+          <h1 className="mt-1 text-2xl font-black sm:text-3xl">Room: {roomCode}</h1>
         </div>
 
         <div className="flex flex-wrap items-start justify-end gap-2">
           <Link to={`/game/${roomCode}/guess`}>
             <Button disabled={isEliminated || !isPlaying}>Make Guess</Button>
           </Link>
-          <Button variant="danger" onClick={handleLeaveGame} disabled={leaving}>
-            {leaving ? 'Leaving...' : 'Leave Game'}
-          </Button>
           <div className="relative">
             <Button
               type="button"
@@ -316,7 +339,7 @@ export function GamePage() {
             {settingsOpen ? (
               <div
                 id="game-settings-panel"
-                className="absolute right-0 z-20 mt-2 w-72 rounded-2xl border border-slate-700 bg-slate-950 p-4 text-left shadow-2xl shadow-slate-950/60"
+                className="absolute right-0 z-20 mt-2 max-h-[75vh] w-80 overflow-y-auto rounded-2xl border border-slate-700 bg-slate-950 p-4 text-left shadow-2xl shadow-slate-950/60"
               >
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
                   Settings
@@ -340,9 +363,26 @@ export function GamePage() {
                     Plays a soft alert when it becomes your turn.
                   </p>
                 </button>
+
+                <div className="mt-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4">
+                  <h3 className="font-black text-slate-100">Game log</h3>
+                  <div className="mt-3 space-y-2">
+                    {gameLog.slice(0, 6).map((entry) => (
+                      <p key={entry.id} className="rounded-xl bg-slate-950 px-3 py-2 text-sm text-slate-300">
+                        {entry.message}
+                      </p>
+                    ))}
+                    {gameLog.length === 0 ? (
+                      <p className="text-sm text-slate-400">No game log yet.</p>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
+          <Button variant="danger" onClick={handleLeaveGame} disabled={leaving}>
+            {leaving ? 'Leaving...' : 'Leave Game'}
+          </Button>
         </div>
       </header>
 
@@ -419,7 +459,6 @@ export function GamePage() {
               <p className="text-xs font-black uppercase tracking-[0.22em] text-slate-400">
                 Players
               </p>
-              <h2 className="mt-1 font-black text-slate-100">Side rail</h2>
             </div>
             <span className="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-slate-300 lg:mt-2 lg:inline-flex">
               {players.length} seated
@@ -481,7 +520,7 @@ export function GamePage() {
         <main className="min-h-0 rounded-[2.5rem] border border-cyan-300/30 bg-gradient-to-br from-slate-900 via-slate-950 to-cyan-950/40 p-4 shadow-2xl shadow-cyan-950/30 lg:overflow-hidden">
           <div className="flex h-full min-h-[560px] flex-col gap-4 lg:min-h-0">
             <div className="grid flex-1 gap-4 lg:grid-cols-[1fr_280px] lg:overflow-hidden">
-              <section className="flex min-h-[360px] flex-col justify-center rounded-[2rem] border border-cyan-300/20 bg-slate-950/70 p-5 text-center">
+              <section className="flex min-h-[360px] flex-col overflow-y-auto rounded-[2rem] border border-cyan-300/20 bg-slate-950/70 p-5 text-center lg:min-h-0">
                 <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300">
                   Current turn
                 </p>
@@ -539,10 +578,13 @@ export function GamePage() {
 
                 <div className="mt-5 flex flex-wrap justify-center gap-2">
                   <Button
-                    onClick={handleRevealCard}
-                    disabled={!isYourTurn || isEliminated || !selectedCardId || busy}
+                    onClick={() => {
+                      setSelectedCardId('')
+                      setOpenPanel('reveal')
+                    }}
+                    disabled={!isYourTurn || isEliminated || busy || (playerState?.hand.length ?? 0) === 0}
                   >
-                    {busy ? 'Revealing...' : 'Reveal Selected Card'}
+                    {busy ? 'Revealing...' : 'Reveal a Clue Card'}
                   </Button>
                   <Button variant="secondary" onClick={() => setOpenPanel('table')}>
                     Table History
@@ -571,7 +613,30 @@ export function GamePage() {
                 <div className="grid gap-3">
                   <button
                     type="button"
-                    onClick={() => setOpenPanel('hand')}
+                    onClick={() => {
+                      setSelectedCardId('')
+                      setOpenPanel('reveal')
+                    }}
+                    disabled={!isYourTurn || isEliminated || busy || (playerState?.hand.length ?? 0) === 0}
+                    className="rounded-2xl border border-cyan-300/70 bg-cyan-950/40 p-4 text-left shadow-lg shadow-cyan-950/30 transition hover:-translate-y-0.5 hover:border-cyan-200 disabled:translate-y-0 disabled:border-slate-700 disabled:bg-slate-950/80 disabled:opacity-50"
+                  >
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-cyan-200">
+                      Reveal card
+                    </p>
+                    <p className="mt-2 text-lg font-black text-white">
+                      Pick one clue card
+                    </p>
+                    <p className="mt-1 text-xs text-slate-300">
+                      {isYourTurn ? 'Tap here to choose and reveal.' : 'Available on your turn.'}
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCardId('')
+                      setOpenPanel('hand')
+                    }}
                     disabled={!playerState || isEliminated || busy}
                     className="rounded-2xl border border-slate-700 bg-slate-950/80 p-4 text-left transition hover:border-cyan-300 disabled:opacity-50"
                   >
@@ -582,7 +647,7 @@ export function GamePage() {
                       {playerState?.hand.length ?? 0}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {selectedCardId ? 'Card selected' : 'Click to choose reveal card'}
+                      View only · use Reveal card to play one
                     </p>
                   </button>
 
@@ -648,19 +713,13 @@ export function GamePage() {
                   </p>
                 ) : null}
 
-                <div className="rounded-2xl bg-slate-950 p-4">
-                  <h3 className="font-black">Latest log</h3>
-                  <div className="mt-3 space-y-2">
-                    {gameLog.slice(0, 4).map((entry) => (
-                      <p key={entry.id} className="rounded-xl bg-slate-900 px-3 py-2 text-sm text-slate-300">
-                        {entry.message}
-                      </p>
-                    ))}
-                    {gameLog.length === 0 ? (
-                      <p className="text-sm text-slate-400">No game log yet.</p>
-                    ) : null}
-                  </div>
-                </div>
+
+                <RoomChat
+                  roomCode={roomCode}
+                  userId={user?.uid}
+                  canChat={Boolean(currentPlayer)}
+                  compact
+                />
               </section>
             </div>
           </div>
@@ -679,8 +738,10 @@ export function GamePage() {
               <div>
                 <h2 className="text-2xl font-black">{openPanelTitle}</h2>
                 <p className="text-sm text-slate-400">
-                  {openPanel === 'hand'
-                    ? 'Choose one card here, then reveal it from the main table.'
+                  {openPanel === 'reveal'
+                    ? 'Choose one card from your hand, then confirm the reveal.'
+                    : openPanel === 'hand'
+                      ? 'Your hand stays visible here. Use the Reveal card button on the board when you want to play one.'
                     : openPanel === 'player'
                       ? 'Player boards show only information visible to you.'
                       : 'These are the cards currently visible to you.'}
@@ -691,6 +752,7 @@ export function GamePage() {
                 onClick={() => {
                   setOpenPanel(null)
                   setSelectedPlayerId(null)
+                  setSelectedCardId('')
                 }}
               >
                 Close
@@ -770,10 +832,10 @@ export function GamePage() {
                 <div className="grid gap-4 lg:col-span-3 sm:grid-cols-2">
                   <div className="rounded-2xl border border-emerald-400/30 bg-emerald-950/20 p-4">
                     <h3 className="font-black text-emerald-200">YES cards</h3>
-                    {selectedPlayerIsYou && !playerState?.hideYesPile ? (
+                    {selectedPlayerClues && !selectedPlayerClues.hideYesPile ? (
                       <div className="mt-3 grid gap-3">
-                        {playerState?.yesPile.map((card) => <CardView key={card.id} card={card} label="YES" />)}
-                        {playerState?.yesPile.length === 0 ? <p className="text-sm text-slate-400">No YES cards yet.</p> : null}
+                        {selectedPlayerClues.yesPile.map((card) => <CardView key={card.id} card={card} label="YES" />)}
+                        {selectedPlayerClues.yesPile.length === 0 ? <p className="text-sm text-slate-400">No YES cards yet.</p> : null}
                       </div>
                     ) : (
                       <p className="mt-3 text-sm text-slate-400">This pile is not visible from your current player view.</p>
@@ -782,10 +844,10 @@ export function GamePage() {
 
                   <div className="rounded-2xl border border-rose-400/30 bg-rose-950/20 p-4">
                     <h3 className="font-black text-rose-200">NO cards</h3>
-                    {selectedPlayerIsYou && !playerState?.hideNoPile ? (
+                    {selectedPlayerClues && !selectedPlayerClues.hideNoPile ? (
                       <div className="mt-3 grid gap-3">
-                        {playerState?.noPile.map((card) => <CardView key={card.id} card={card} label="NO" />)}
-                        {playerState?.noPile.length === 0 ? <p className="text-sm text-slate-400">No NO cards yet.</p> : null}
+                        {selectedPlayerClues.noPile.map((card) => <CardView key={card.id} card={card} label="NO" />)}
+                        {selectedPlayerClues.noPile.length === 0 ? <p className="text-sm text-slate-400">No NO cards yet.</p> : null}
                       </div>
                     ) : (
                       <p className="mt-3 text-sm text-slate-400">This pile is not visible from your current player view.</p>
@@ -793,14 +855,6 @@ export function GamePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-cyan-400/30 bg-cyan-950/20 p-4">
-                  <h3 className="font-black text-cyan-200">Cards in hand</h3>
-                  {selectedPlayerIsYou ? (
-                    <p className="mt-3 text-sm text-slate-300">Open the Hand button on the board to choose one of your {playerState?.hand.length ?? 0} cards.</p>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-400">Other players’ hands are private.</p>
-                  )}
-                </div>
               </div>
             ) : openPanel === 'identities' ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -809,40 +863,56 @@ export function GamePage() {
                 ))}
               </div>
             ) : (
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {openPanelCards.map((card) => {
-                  const selected = selectedCardId === card.id
-                  const canSelect = openPanel === 'hand' && isYourTurn && !isEliminated
-
-                  return (
-                    <button
-                      key={card.id}
-                      type="button"
-                      onClick={() => {
-                        if (!canSelect) return
-                        setSelectedCardId(card.id)
-                        setOpenPanel(null)
-                      }}
-                      disabled={!canSelect}
-                      className={`rounded-2xl text-left transition ${selected ? 'ring-2 ring-cyan-300' : 'ring-1 ring-transparent'} disabled:cursor-default disabled:opacity-100`}
+              <div className="mt-5 space-y-4">
+                {openPanel === 'reveal' ? (
+                  <div className="rounded-2xl border border-cyan-300/30 bg-cyan-950/20 p-4">
+                    <p className="text-sm font-bold text-cyan-100">
+                      Pick a clue card below, then press Reveal selected card.
+                    </p>
+                    <Button
+                      className="mt-3"
+                      onClick={() => handleRevealCard()}
+                      disabled={!selectedCardId || busy}
                     >
-                      <CardView
-                        card={card}
-                        label={
-                          openPanel === 'yesPile'
-                            ? 'YES'
-                            : openPanel === 'noPile'
-                              ? 'NO'
-                              : selected
-                                ? 'Selected'
-                                : undefined
-                        }
-                      />
-                    </button>
-                  )
-                })}
+                      {busy ? 'Revealing...' : 'Reveal selected card'}
+                    </Button>
+                  </div>
+                ) : null}
 
-                {openPanelCards.length === 0 ? <p className="text-sm text-slate-400">No cards to show.</p> : null}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {openPanelCards.map((card) => {
+                    const selected = selectedCardId === card.id
+                    const canSelect = openPanel === 'reveal' && isYourTurn && !isEliminated
+
+                    return (
+                      <button
+                        key={card.id}
+                        type="button"
+                        onClick={() => {
+                          if (!canSelect) return
+                          setSelectedCardId(card.id)
+                        }}
+                        disabled={!canSelect}
+                        className={`rounded-2xl text-left transition ${selected ? 'ring-2 ring-cyan-300' : 'ring-1 ring-transparent'} disabled:cursor-default disabled:opacity-100`}
+                      >
+                        <CardView
+                          card={card}
+                          label={
+                            openPanel === 'yesPile'
+                              ? 'YES'
+                              : openPanel === 'noPile'
+                                ? 'NO'
+                                : selected
+                                  ? 'Selected'
+                                  : undefined
+                          }
+                        />
+                      </button>
+                    )
+                  })}
+
+                  {openPanelCards.length === 0 ? <p className="text-sm text-slate-400">No cards to show.</p> : null}
+                </div>
               </div>
             )}
           </div>
