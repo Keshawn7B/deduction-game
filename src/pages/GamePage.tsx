@@ -291,7 +291,7 @@ export function GamePage() {
           </p>
           <h1 className="mt-1 text-2xl font-black sm:text-3xl">Room {roomCode}</h1>
           <p className="mt-1 text-sm text-slate-400">
-            One-screen board · players on the rail · recent turn in the center
+            One-screen board · players on the rail · current turn in the center
           </p>
         </div>
 
