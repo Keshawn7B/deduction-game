@@ -283,7 +283,7 @@ export function GamePage() {
   }
 
   return (
-    <section className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-4 py-4 lg:h-screen lg:overflow-hidden">
+    <section className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-4 py-4 lg:h-screen lg:overflow-y-auto">
       <header className="flex shrink-0 flex-col gap-3 rounded-[2rem] border border-slate-800 bg-slate-950/90 p-4 shadow-2xl shadow-slate-950/40 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.28em] text-cyan-300">
@@ -347,7 +347,7 @@ export function GamePage() {
       </header>
 
       {isSetupPhase ? (
-        <div className="shrink-0 rounded-2xl border border-cyan-400/40 bg-cyan-950/20 p-4">
+        <div className="shrink-0 rounded-[2rem] border border-slate-800 bg-slate-950/90 p-4 shadow-2xl shadow-slate-950/40">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-2xl">
               <h2 className="text-xl font-black text-cyan-200">Pick starting clues</h2>
@@ -483,7 +483,7 @@ export function GamePage() {
             <div className="grid flex-1 gap-4 lg:grid-cols-[1fr_280px] lg:overflow-hidden">
               <section className="flex min-h-[360px] flex-col justify-center rounded-[2rem] border border-cyan-300/20 bg-slate-950/70 p-5 text-center">
                 <p className="text-xs font-black uppercase tracking-[0.3em] text-cyan-300">
-                  Recent turn
+                  Current turn
                 </p>
                 <h2 className="mt-3 text-4xl font-black text-white sm:text-5xl">
                   {currentTurnName}
