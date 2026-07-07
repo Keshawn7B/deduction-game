@@ -84,11 +84,6 @@ export function HomePage() {
     <section className="relative min-h-screen px-4 py-6 sm:px-6 lg:px-8">
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-6xl flex-col items-center justify-center gap-8 pb-24 pt-12 text-center">
         <div className="max-w-5xl">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-200/25 bg-cyan-200/10 px-4 py-2 text-xs font-black uppercase tracking-[0.28em] text-cyan-100 shadow-lg shadow-cyan-950/40 backdrop-blur">
-            <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.95)]" />
-            Multiplayer mystery
-          </div>
-
           <h1
             className="deducktion-title text-7xl font-black leading-none sm:text-8xl lg:text-9xl"
             aria-label="Deducktion"
